@@ -1,0 +1,43 @@
+export type DBCustomer = {
+  id: string;
+  organization_id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  address: string | null;
+  id_type: string | null;
+  id_number: string | null;
+  is_loyal: boolean | null;
+  created_at: string | null;
+  updated_at: string | null;
+  created_by: string | null;
+  notes: string | null;
+  loyalty_points: number | null;
+  loyalty_level_id: string | null;
+  last_purchase_date: string | null;
+  birthday: string | null;
+  last_purchase_location: string | null;
+  zone: string | null;
+  external_provider: string | null;
+  external_user_id: string | null;
+  daily_limit_usd: number | null;
+  kyc_id_document_url: string | null;
+  kyc_signature_url: string | null;
+};
+
+export type CustomerUpsertInput = {
+  organization_id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  address: string | null;
+  id_type: string | null;
+  id_number: string | null;
+  is_loyal: boolean;
+  loyalty_points: number;
+  notes: string | null;
+  daily_limit_usd?: number | null;
+  kyc_id_document_url?: string | null;
+  kyc_signature_url?: string | null;
+  updated_at?: string | null;
+};

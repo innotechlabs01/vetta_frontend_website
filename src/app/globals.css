@@ -1,0 +1,221 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground-rgb: #333;
+  --background-start-rgb: #F4F3EC;
+  /* #F4F3EC en RGB */
+  --background-end-rgb: #F4F3EC;
+  /* #e1dfd0 en RGB */
+  --deep-background: #F5F5F8;
+  --app-mobile-header-height: 56px;
+  --app-content-height: 100svh;
+  --app-content-min-height: 100svh;
+}
+
+@media (max-width: 767px) {
+  :root {
+    --app-content-height: calc(100svh - var(--app-mobile-header-height));
+    --app-content-min-height: calc(100svh - var(--app-mobile-header-height));
+  }
+
+  .dashboard-content .min-h-screen {
+    min-height: var(--app-content-min-height);
+  }
+
+  .dashboard-content .h-screen {
+    height: var(--app-content-min-height);
+  }
+}
+
+body {
+  color: var(--foreground-rgb);
+  background: var(--deep-background);
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+
+#nprogress .bar {
+  background: #4f46e5;
+  /* Color indigo que combina bien con la mayoría de los temas */
+  height: 3px;
+}
+
+/* Quitar el spinner si no lo quieres mostrar */
+#nprogress .spinner {
+  display: none;
+}
+
+.toast-custom {
+  font-size: 14px;
+}
+
+/* Scrollbars personalizados para navegadores modernos (Chrome, Edge, Opera) */
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 9999px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: #d1d5db;
+  /* Tailwind gray-300 */
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+/* Opcional: en hover más oscuro */
+*::-webkit-scrollbar-thumb:hover {
+  background-color: #9ca3af;
+  /* Tailwind gray-400 */
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #d1d5db transparent;
+}
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 224 71.4% 4.1%;
+    --card: 0 0% 100%;
+    --card-foreground: 224 71.4% 4.1%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 224 71.4% 4.1%;
+    /* Color primario cambiado a azul */
+    --primary: 215.06deg 100% 50%;
+    /* Azul */
+    --primary-foreground: 210 40% 98%;
+    /* Blanco para contraste */
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222.2 84% 4.9%;
+    /* Negro */
+    --muted: 210 40% 96%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96%;
+    --accent-foreground: 222.2 84% 4.9%;
+    /* Negro */
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    /* Ring (outline) cambiado a azul */
+    --ring: 221.2 83.2% 53.3%;
+    /* Azul para el outline */
+    --chart-1: 12 76% 61%;
+    --chart-2: 173 58% 39%;
+    --chart-3: 197 37% 24%;
+    --chart-4: 43 74% 66%;
+    --chart-5: 27 87% 67%;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 224 71.4% 4.1%;
+    --foreground: 210 20% 98%;
+    --card: 224 71.4% 4.1%;
+    --card-foreground: 210 20% 98%;
+    --popover: 224 71.4% 4.1%;
+    --popover-foreground: 210 20% 98%;
+    --primary: 210 20% 98%;
+    --primary-foreground: 220.9 39.3% 11%;
+    --secondary: 215 27.9% 16.9%;
+    --secondary-foreground: 210 20% 98%;
+    --muted: 215 27.9% 16.9%;
+    --muted-foreground: 217.9 10.6% 64.9%;
+    --accent: 215 27.9% 16.9%;
+    --accent-foreground: 210 20% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 20% 98%;
+    --border: 215 27.9% 16.9%;
+    --input: 215 27.9% 16.9%;
+    --ring: 216 12.2% 83.9%;
+    --chart-1: 220 70% 50%;
+    --chart-2: 160 60% 45%;
+    --chart-3: 30 80% 55%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 340 75% 55%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+
+
+
+/* CANTIDAD DE LINEAS PARA EL TITULO EN EL PASO 3 */
+
+
+/* 2 líneas fijas con elipsis siempre visible */
+.two-lines-ellipsis {
+  position: relative;
+  /* usa el mismo line-height que en tu <p> */
+  line-height: 14px;
+  /* fuerza exactamente 2 líneas de alto */
+  min-height: calc(14px * 2);
+  max-height: calc(14px * 2);
+  overflow: hidden;
+  display: block;
+  /* opcional: mejora el corte de palabras largas */
+  word-break: break-word;
+}
+
+/* puntos suspensivos visibles al final de la 2ª línea */
+.two-lines-ellipsis::after {
+  content: '…';
+  position: absolute;
+  right: 4px;
+  /* ajusta al padding de tu contenedor */
+  bottom: 0;
+  /* si el fondo de la tarjeta no es blanco, cámbialo para que no se note */
+  background: transparent;
+  /* un pequeño padding evita que tape la última letra */
+  padding-left: 2px;
+}
+
+
+
+.clamp-2{
+  display:-webkit-box;
+  -webkit-line-clamp:2;      /* número de líneas */
+  -webkit-box-orient:vertical;
+  overflow:hidden;
+}
+
+
+.clamp-5{
+  display: -webkit-box;
+  -webkit-line-clamp: 5;      /* número de líneas */
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
