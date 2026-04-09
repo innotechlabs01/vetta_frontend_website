@@ -75,7 +75,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  const response = NextResponse.redirect(new URL(next, url));
+  const response = NextResponse.redirect(new URL(next, req.url));
   return applyOrgCookie(response, orgId);
 }
 

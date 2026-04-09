@@ -177,27 +177,16 @@ export const signInAction = async (formData: FormData) => {
     return redirect(`/verify-otp?phone=${encodeURIComponent(phoneForRedirect)}&status=otp_sent`);
   }
 
-  // Enviar OTP
-  const { error } = await supabase.auth.signInWithOtp({
-    phone: fullPhoneNumber,
-    options: {
-      shouldCreateUser: true,
-      data: {
-        phone: fullPhoneNumber,
-      }
-    }
-  });
+  // Enviar OTP via Sent.dm
+  const { sendOTP } = await import('@/lib/otp');
+  const otpResult = await sendOTP(fullPhoneNumber);
 
-  // Manejar errores específicos
-  if (error) {
-    console.error("[auth:sms] Error sending SMS OTP", {
-      phone: fullPhoneNumber,
-      error: error.message,
-    });
-    return redirect(`/login?type=error&message=${encodeURIComponent(error.message)}`);
+  if (!otpResult.success) {
+    console.error("[auth:sms] Error sending OTP:", otpResult.error);
+    return redirect(`/login?type=error&message=${encodeURIComponent(otpResult.error || "Error al enviar código")}`);
   }
 
-  console.info("[auth:sms] OTP sent successfully", { phone: fullPhoneNumber });
+  console.info("[auth:sms] OTP sent successfully via Sent.dm", { phone: fullPhoneNumber });
   const phoneForRedirect = fullPhoneNumber.startsWith('+') ? fullPhoneNumber.substring(1) : fullPhoneNumber;
   return redirect(`/verify-otp?phone=${encodeURIComponent(phoneForRedirect)}&status=otp_sent`);
 
@@ -436,7 +425,7 @@ export async function verifySmsOtpAction(formData: FormData): Promise<any> {
       console.log("[bypass] Session created successfully! Redirecting to /org/select");
 
       // Forzar la redirección de forma segura
-      return Response.redirect(new URL("/org/select", process.env.NEXT_PUBLIC_SUPABASE_URL || "http://localhost:3000"));
+      return Response.redirect(new URL("/org/select", process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_APP_URL));
 
     } catch (err) {
       console.error("[bypass] Error:", err);
@@ -446,48 +435,77 @@ export async function verifySmsOtpAction(formData: FormData): Promise<any> {
 
   // Flujo normal: verificar OTP realmente
 
-  // Verificar OTP (flujo normal para producción)
-  const { data, error } = await supabase.auth.verifyOtp({
-    phone: fullPhoneNumber,
-    token,
-    type: 'sms'
-  });
+  // Verificar OTP usando Sent.dm (custom verification)
+  const { verifyOTP } = await import('@/lib/otp');
+  const verifyResult = await verifyOTP(fullPhoneNumber, token);
 
-  if (error) {
-    const msg = error.message.includes('expired')
-      ? "El código ha expirado. Solicita uno nuevo."
-      : "Código inválido. Verifica e intenta de nuevo.";
+  if (!verifyResult.success) {
     return redirect(
-      `/verify-otp?phone=${encodeURIComponent(phone)}&type=error&message=${encodeURIComponent(msg)}`
+      `/verify-otp?phone=${encodeURIComponent(phone)}&type=error&message=${encodeURIComponent(verifyResult.error || "Código inválido")}`
     );
   }
 
-  if (!data.user) {
-    return {
-      type: "error",
-      message: "Verificación fallida. Por favor intenta de nuevo.",
-    };
-  }
-
-  // Crear o actualizar perfil con información del teléfono
-  const { error: profileError } = await supabase
-    .from("profiles")
-    .upsert({
-      user_id: data.user.id,
+  // OTP verificado - crear sesión
+  const admin = getSupabaseAdmin();
+  
+  // Buscar o crear usuario basado en teléfono
+  let userId: string;
+  
+  const foundUserId = await findUserIdByPhone(admin, fullPhoneNumber);
+  
+  if (foundUserId) {
+    userId = foundUserId;
+  } else {
+    // Crear usuario nuevo
+    const tempEmail = `user_${Date.now()}@vetta.app`;
+    const { data: newUser, error: createError } = await admin.auth.admin.createUser({
       phone: fullPhoneNumber,
-      email: data.user.email,
-    }, {
-      onConflict: 'user_id',
-      ignoreDuplicates: false
+      email: tempEmail,
+      user_metadata: {
+        phone: fullPhoneNumber,
+      },
+      email_confirm: true,
+      phone_confirm: true,
     });
-
-  if (profileError) {
-    console.error("Error creating/updating profile:", profileError.message);
-    // No retornamos error porque el usuario ya está autenticado
+    
+    if (createError || !newUser?.user) {
+      console.error("[verify] Error creating user:", createError);
+      return redirect(
+        `/verify-otp?phone=${encodeURIComponent(phone)}&type=error&message=Error al crear usuario`
+      );
+    }
+    userId = newUser.user.id;
   }
 
-  // Redirigir a /org/select para que elija la organización
-  redirect("/org/select");
+  // Crear sesión usando admin para obtener un token válido
+  // Generar un nuevo token usando el método de admin
+  const { data: sessionData, error: sessionError } = await admin.auth.admin.generateLink({
+    type: 'magiclink',
+    email: `user_${userId}@vetta.app`,
+  });
+
+  if (sessionError || !sessionData) {
+    console.error("[verify] Error generating session:", sessionError);
+    return redirect(
+      `/verify-otp?phone=${encodeURIComponent(phone)}&type=error&message=Error al crear sesión`
+    );
+  }
+
+  // Establecer la sesión con el token generado
+  const { error: setError } = await supabase.auth.setSession({
+    access_token: sessionData.properties.hashed_token,
+    refresh_token: sessionData.properties.hashed_token
+  });
+
+  if (setError) {
+    console.error("[verify] Set session error:", setError);
+    return redirect("/login?type=error&message=Error al establecer sesión");
+  }
+
+  console.log("[verify] Session created successfully! Redirecting to /org/select");
+
+  // Forzar la redirección de forma segura
+  return Response.redirect(new URL("/org/select", process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_APP_URL));
 }
 
 // Acción para reenviar OTP por SMS
@@ -514,26 +532,19 @@ export async function resendSmsOtpAction(formData: FormData): Promise<any> {
     );
   }
 
-  // Llamada a Supabase sin try/catch
-  const { error } = await supabase.auth.signInWithOtp({
-    phone: fullPhoneNumber,
-    options: {
-      shouldCreateUser: true,
-    },
-  });
+  // Llamada a Sent.dm para reenviar OTP
+  const { sendOTP } = await import('@/lib/otp');
+  const otpResult = await sendOTP(fullPhoneNumber);
 
-  if (error) {
-    console.error("[auth:sms] Error resending SMS OTP", {
-      phone: fullPhoneNumber,
-      error: error.message,
-    });
+  if (!otpResult.success) {
+    console.error("[auth:sms] Error resending OTP:", otpResult.error);
     return {
       type: "error",
-      message: error.message,
+      message: otpResult.error || "Error al reenviar código",
     };
   }
 
-  console.info("[auth:sms] OTP resent successfully", { phone: fullPhoneNumber });
+  console.info("[auth:sms] OTP resent successfully via Sent.dm", { phone: fullPhoneNumber });
   // Redirect siempre ocurre aquí, fuera de cualquier bloque de error
   return redirect(
     `/verify-otp?phone=${encodeURIComponent(phone)}&status=otp_resent`

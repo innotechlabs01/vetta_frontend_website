@@ -1,4 +1,6 @@
-import { useSentDm } from '@/hooks/useSentDm';
+// src/components/marketing/Dashboard.tsx
+"use client";
+
 import { useEnvironment } from '@/context/EnvironmentContext';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -6,9 +8,19 @@ import { SendTestMessage } from './SendTestMessage';
 import { MessageHistory } from './MessageHistory';
 import { StatCard } from './StatCard';
 
+async function sendMessageApi(options: any): Promise<any> {
+  const response = await fetch('/api/sent-dm/send', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(options),
+  });
+  return response.json();
+}
+
 export function MessagingDashboard() {
   const { org } = useEnvironment();
-  const { sendMessage } = useSentDm();
   const [stats, setStats] = useState({
     total_sent: 0,
     total_delivered: 0,
@@ -28,8 +40,6 @@ export function MessagingDashboard() {
 
     try {
       setLoading(true);
-      // In a real implementation, this would call your backend API
-      // For now, we'll simulate with mock data or fetch from analytics table
       const mockStats = {
         total_sent: 1245,
         total_delivered: 1180,
@@ -39,7 +49,6 @@ export function MessagingDashboard() {
         total_cost: 42.50,
       };
       
-      // Simulate API delay
       await new Promise(resolve => setTimeout(resolve, 800));
       
       setStats(mockStats);
@@ -65,7 +74,6 @@ export function MessagingDashboard() {
         <Button 
           variant="outline"
           onClick={() => {
-            // Trigger refresh
             loadMessagingStats();
           }}
         >
@@ -114,7 +122,7 @@ export function MessagingDashboard() {
           <div className="space-y-4">
             <h3 className="font-semibold">Send Test Message</h3>
             <SendTestMessage 
-              onSend={sendMessage} 
+              onSend={sendMessageApi} 
               orgId={org.id} 
             />
           </div>

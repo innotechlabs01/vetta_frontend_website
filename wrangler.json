@@ -1,8 +1,10 @@
 {
-  "name": "cf-re-app",
+  "name": "front_vetta_website",
   "main": ".open-next/worker.js",
   "compatibility_date": "2024-11-01",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
   "keep_vars": true,
   "minify": true,
   "assets": {
