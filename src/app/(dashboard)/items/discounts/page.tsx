@@ -229,7 +229,7 @@ function genCode(len = 8) {
   return out;
 }
 
-// Helpers para fecha/hora “bonita” (es-CO)
+// Helpers para fecha/hora ).replace(bxe2x80x9d, bbonita” (es-CO)
 function parseLocal(date: string, time: string) {
   // Asegura HH:mm
   const hhmm = (time || "00:00").slice(0, 5);
@@ -275,7 +275,7 @@ function prettyRange(r?: {
   // Si ninguna está habilitada/no hay fechas válidas
   if (!hasStart && !hasEnd) return "";
 
-  // Flags de horas “completas”
+  // Flags de horas ).replace(bxe2x80x9d, bcompletas”
   const startIsMidnight = (r.start_time || "00:00").slice(0,5) === "00:00";
   const endIsEOD        = (r.end_time || "23:59").slice(0,5) === "23:59";
 

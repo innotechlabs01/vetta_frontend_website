@@ -3,14 +3,9 @@
  * 
  * Endpoint para consultar sucursales disponibles para delivery
  * Usa PostGIS para búsquedas geoespaciales eficientes
- * 
- * Query Parameters:
- * - organization_id: UUID de la organización (requerido)
- * - lat, lng: Coordenadas del cliente para búsqueda cercana (opcional)
- * - service: 'delivery' | 'pickup' | 'national_shipping' (default: 'delivery')
- * - radius_km: Radio de búsqueda en KM (default: 5)
- * - date_time: ISO timestamp para verificar disponibilidad (default: ahora)
  */
+export const dynamic = 'force-dynamic';
+
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";

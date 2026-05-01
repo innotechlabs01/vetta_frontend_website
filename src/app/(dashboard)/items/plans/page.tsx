@@ -213,7 +213,7 @@ function FrequencyOptionModal({
           {/* FILA 2 — Fecha de cobro (responsive: 100% / 50-50) */}
           <div className="space-y-2">
             <Label>Fecha de cobro</Label>
-            {/* Caso 1: “Fecha de inicio de la suscripción” → ancho completo */}
+            {/* Caso 1: ).replace(bxe2x80x9d, bFecha de inicio de la suscripción” → ancho completo */}
             {(!isMonthly || state.billing_anchor !== "day_of_month") && (
               <select
                 className="w-full border rounded-md px-2 py-3 bg-background"
@@ -233,7 +233,7 @@ function FrequencyOptionModal({
               </select>
             )}
 
-            {/* Caso 2: “Día específico del mes” → 50/50 (select + input) */}
+            {/* Caso 2: ).replace(bxe2x80x9d, bDía específico del mes” → 50/50 (select + input) */}
             {isMonthly && state.billing_anchor === "day_of_month" && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <select

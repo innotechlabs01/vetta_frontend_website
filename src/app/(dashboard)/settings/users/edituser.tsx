@@ -331,7 +331,7 @@ export function EditUserModal({
                 )}
               </div>
               <p className="text-xs text-muted-foreground mt-1">
-                Los menus se asignan automaticamente segun el rol del usuario en la columna "Menus" de la tabla.
+                Los menus se asignan automaticamente segun el rol del usuario en la columna de la tabla.
               </p>
             </div>
 

@@ -650,7 +650,7 @@ async function extractPaletteFromImage(src: string, maxColors = 6): Promise<stri
     .filter(uniqueHex)
     .slice(0, maxColors);
 
-  // ordenar por saturación (más “marca” arriba)
+  // ordenar por saturación (más ).replace(bxe2x80x9d, bmarca” arriba)
   const sorted = colors.sort((a, b) => hslSat(b) - hslSat(a));
   return sorted;
 }

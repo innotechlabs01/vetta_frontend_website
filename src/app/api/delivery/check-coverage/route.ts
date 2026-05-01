@@ -2,8 +2,10 @@
  * GET /api/delivery/check-coverage
  * 
  * Verifica si una ubicación está dentro de las zonas de cobertura de una sucursal
- * Usa PostGIS para validación geoespacial
+ * Usa PostGIS para validación geoespacial eficiente
  */
+export const dynamic = 'force-dynamic';
+
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
