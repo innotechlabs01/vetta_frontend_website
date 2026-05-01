@@ -738,7 +738,8 @@ function SiteDataForm({
 
 export default function OnlineModule({
   org,
-  initialBrandData
+  initialBrandData,
+  locations
 }: {
   org: { id: string; name: string; slug: string | null };
   initialBrandData?: {
@@ -753,9 +754,19 @@ export default function OnlineModule({
     title_init?: string | null;
     title_last?: string | null;
   } | null;
+  locations?: Array<{
+    id: string;
+    name: string;
+    is_active: boolean;
+    is_online_store: boolean;
+    is_pos_enabled: boolean;
+    pickup_enabled: boolean;
+    local_delivery_enabled: boolean;
+    shipping_enabled: boolean;
+  }>;
 }) {
   const [theme, setTheme] = useState<(typeof THEME_OPTIONS)[number]["key"]>("default");
-  const [slug, setSlug] = useState(org.slug || "")
+  const [slug, setSlug] = useState(org.slug || "");
   const [isUpdating, setIsUpdating] = useState(false);
   const [category, setCategory] = useState("Restaurante");
   const [enableSubscriptions, setEnableSubscriptions] = useState(false);
@@ -771,7 +782,7 @@ export default function OnlineModule({
     description: initialBrandData?.brand_description || "",
     colors: {
       primary: initialBrandData?.brand_colors?.primary || "#2563EB",
-      secondary: initialBrandData?.brand_colors?.secondary || "#6366f1", 
+      secondary: initialBrandData?.brand_colors?.secondary || "#6366f1",
       accent: initialBrandData?.brand_colors?.accent || "#22c55e",
     },
     socials: {
@@ -785,10 +796,15 @@ export default function OnlineModule({
   });
 
   const [colors, setColors] = useState({
-    primary: "#2563EB", 
-    accent: "#10B981", 
-    text: "#111827", 
+    primary: "#2563EB",
+    accent: "#10B981",
+    text: "#111827",
   });
+
+  const [locationList, setLocationList] = useState(locations || []);
+  const [togglingLocationId, setTogglingLocationId] = useState<string | null>(null);
+
+  const supabase = getSupabaseBrowser();
 
   useEffect(() => {
     if (theme === "restaurant") {
@@ -804,6 +820,47 @@ export default function OnlineModule({
 
   const slugOk = isValidSlug(slug);
   const url = slug ? `${slug}.recompry.site` : "";
+
+  async function toggleLocationOnline(locationId: string, enable: boolean) {
+    setTogglingLocationId(locationId);
+    try {
+      const { error } = await supabase
+        .from("locations")
+        .update({ is_online_store: enable })
+        .eq("id", locationId);
+
+      if (error) throw error;
+
+      setLocationList(prev => prev.map(loc => 
+        loc.id === locationId ? { ...loc, is_online_store: enable } : loc
+      ));
+
+      toast.success(enable ? "Ubicación activada para online" : "Ubicación desactivada para online");
+    } catch (error: any) {
+      console.error(error);
+      toast.error(error.message || "Error al actualizar la ubicación");
+    } finally {
+      setTogglingLocationId(null);
+    }
+  }
+
+  function getLocationStatus(loc: typeof locationList[0]) {
+    if (!loc.is_active) return { status: "inactive", label: "Inactiva", color: "text-gray-400 bg-gray-100" };
+    if (loc.is_online_store) return { status: "online", label: "Online", color: "text-green-700 bg-green-100" };
+    return { status: "offline", label: "Offline", color: "text-yellow-700 bg-yellow-100" };
+  }
+
+  function getActiveChannels(loc: typeof locationList[0]) {
+    const channels: string[] = [];
+    if (loc.pickup_enabled) channels.push("Pickup");
+    if (loc.local_delivery_enabled) channels.push("Delivery");
+    if (loc.shipping_enabled) channels.push("Envíos");
+    return channels.length > 0 ? channels.join(" • ") : "Sin canales";
+  }
+
+  const onlineCount = locationList.filter(l => l.is_online_store && l.is_active).length;
+  const activeCount = locationList.filter(l => l.is_active).length;
+  const progressPercent = activeCount > 0 ? (onlineCount / activeCount) * 100 : 0;
 
  
 
@@ -869,6 +926,111 @@ export default function OnlineModule({
 
       <div className="grid gap-6 mx-auto max-w-6xl pb-10 lg:grid-cols-[minmax(0,1.8fr)_minmax(280px,1fr)]">
         <div className="flex flex-col gap-6">
+          {/* Panel de Ubicaciones Online */}
+          <section>
+            <div className="rounded-2xl border border-gray-200 p-4 bg-white shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold text-gray-900">Sucursales</h2>
+                <span className="text-sm text-gray-500">
+                  {onlineCount}/{activeCount} activas
+                </span>
+              </div>
+
+              {/* Barra de progreso */}
+              <div className="mb-4">
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div
+                    className="bg-green-500 h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${progressPercent}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Lista de ubicaciones */}
+              <div className="space-y-3">
+                {locationList.length === 0 ? (
+                  <p className="text-sm text-gray-500 text-center py-4">
+                    No hay sucursales configuradas.
+                    <a href="/settings/locations" className="text-blue-600 ml-1">
+                      Agregar sucursal
+                    </a>
+                  </p>
+                ) : (
+                  locationList.map((loc) => {
+                    const { status, label, color } = getLocationStatus(loc);
+                    const channels = getActiveChannels(loc);
+                    const isToggling = togglingLocationId === loc.id;
+                    const isOnline = status === "online";
+
+                    return (
+                      <div
+                        key={loc.id}
+                        className="flex items-center justify-between p-3 rounded-lg border border-gray-200 hover:border-gray-300 transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-2">
+                            {status === "online" && (
+                              <span className="w-2 h-2 rounded-full bg-green-500" />
+                            )}
+                            {status === "offline" && (
+                              <span className="w-2 h-2 rounded-full bg-yellow-500" />
+                            )}
+                            {status === "inactive" && (
+                              <span className="w-2 h-2 rounded-full bg-gray-400" />
+                            )}
+                            <span className="font-medium text-gray-900">{loc.name}</span>
+                          </div>
+                          <span className={cn("text-xs px-2 py-0.5 rounded-full", color)}>
+                            {label}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-4">
+                          <span className="text-xs text-gray-500 hidden sm:block">{channels}</span>
+
+                          {!loc.is_active ? (
+                            <a
+                              href="/settings/locations"
+                              className="text-xs text-blue-600 hover:underline"
+                            >
+                              Activar
+                            </a>
+                          ) : (
+                            <button
+                              onClick={() => toggleLocationOnline(loc.id, !isOnline)}
+                              disabled={isToggling}
+                              className={cn(
+                                "text-xs px-3 py-1 rounded-full font-medium transition-colors",
+                                isOnline
+                                  ? "bg-red-100 text-red-700 hover:bg-red-200"
+                                  : "bg-green-100 text-green-700 hover:bg-green-200",
+                                isToggling && "opacity-50"
+                              )}
+                            >
+                              {isToggling ? "..." : isOnline ? "Desactivar" : "Activar"}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              <div className="mt-4 pt-4 border-t border-gray-100">
+                <a
+                  href="/settings/locations"
+                  className="text-sm text-blue-600 hover:underline flex items-center gap-1"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Gestionar sucursales
+                </a>
+              </div>
+            </div>
+          </section>
+
           <section>
             <div className="rounded-2xl border border-gray-200 p-4 bg-white shadow-sm h-fit">
               <h2 className="text-xl font-bold text-gray-900 mb-6">Dominio</h2>

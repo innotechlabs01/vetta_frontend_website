@@ -11,6 +11,7 @@ import CustomerRow from "./Customer";
 import { HorizontalCardList } from "./Drafts";
 import { Plus, ClipboardCheck, ArrowDownUp, ShoppingCart, X, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 import { usePrinterContext } from "@/context/PrinterContext";
 import OrderTypeSelector, {
   type FieldConfig as OTFieldConfig,
@@ -25,6 +26,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useCashShift } from "./hooks/useCashShift";
+import { usePosPromotions } from "./hooks/usePromotions";
 import { createPortal } from "react-dom";
 import SaleConfirmModal from "./SaleConfirmModal";
 import KycModal, { createEmptyKycForm, type KycFormState } from "./KycModal";
@@ -130,12 +132,55 @@ const RESTAURANT_BUSINESS_IDS = new Set([
   "cafe",
   "coffee_shop",
   "fast_food",
+  "bar",
+]);
+
+const STORE_BUSINESS_IDS = new Set([
+  "store",
+  "supermarket",
+  "boutique",
+  "electronics",
+  "hardware",
+  "beauty",
+  "convenience",
+  "pharmacy",
+  "clinic",
 ]);
 
 const EXCHANGE_BUSINESS_IDS = new Set([
   "exchange",
   "currency_exchange",
 ]);
+
+function isRestaurantCategory(category: string | null | undefined): boolean {
+  if (!category) return false;
+  return RESTAURANT_BUSINESS_IDS.has(category.toLowerCase());
+}
+
+function isStoreCategory(category: string | null | undefined): boolean {
+  if (!category) return false;
+  return STORE_BUSINESS_IDS.has(category.toLowerCase());
+}
+
+function shouldShowTableSelector(category: string | null | undefined): boolean {
+  return isRestaurantCategory(category);
+}
+
+function shouldShowKitchenPrint(category: string | null | undefined): boolean {
+  return isRestaurantCategory(category);
+}
+
+function shouldShowTipCalculation(category: string | null | undefined): boolean {
+  return isRestaurantCategory(category);
+}
+
+function shouldShowNationalShipping(category: string | null | undefined): boolean {
+  return isStoreCategory(category);
+}
+
+function shouldShowStockInfo(category: string | null | undefined): boolean {
+  return isStoreCategory(category);
+}
 
 const ORDER_TYPE_ICON_ALIASES: Record<string, string> = {
   car: "🚗",
@@ -1435,28 +1480,46 @@ export default function NuevaVentaPage() {
     [printerSelection],
   );
 
-  const {
-    activeShift,
-    shiftSummary,
-    shiftAmountLabel,
-    shiftLoading,
-    organizationChannels,
-    shiftChannels,
-    shiftChannelStatuses,
-    handleUpdateChannelStatus,
-    handleOpenCashMovementModal,
-    handleShiftSummaryButton,
-    refreshShiftSummary,
-    modals: cashShiftModals,
-  } = useCashShift({
-    organizationId,
-    supabase,
-    userId: user?.id,
-    userEmail: user?.email ?? null,
-    profileName: profile?.full_name ?? null,
-    orgName: org?.name ?? null,
-    buildPrinterPayload,
-  });
+   const {
+     activeShift,
+     shiftSummary,
+     shiftAmountLabel,
+     shiftLoading,
+     organizationChannels,
+     shiftChannels,
+     shiftChannelStatuses,
+     handleUpdateChannelStatus,
+     handleOpenCashMovementModal,
+     handleShiftSummaryButton,
+     refreshShiftSummary,
+     modals: cashShiftModals,
+   } = useCashShift({
+     organizationId,
+     supabase,
+     userId: user?.id,
+     userEmail: user?.email ?? null,
+     profileName: profile?.full_name ?? null,
+     orgName: org?.name ?? null,
+     buildPrinterPayload,
+   });
+   
+    const {
+      appliedPromotion,
+      promotionCode,
+      setPromotionCode,
+      referralCode,
+      setReferralCode,
+      validatingPromotion,
+      validatingReferral,
+      promotionError,
+      referralError,
+      handleValidatePromotion,
+      handleApplyPromotion,
+      clearAppliedPromotion,
+      handleValidateReferral,
+      handleApplyReferralRewards,
+      referralRewardApplied,
+    } = usePosPromotions();
   // Location ID del turno activo
   const currentLocationId = activeShift?.location_id ?? null;
 
@@ -1548,6 +1611,7 @@ export default function NuevaVentaPage() {
   const [products, setProducts] = useState<DBProduct[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [byCat, setByCat] = useState<Record<string, string[]>>({}); // category_id -> product_ids
+  const [inventoryMap, setInventoryMap] = useState<Record<string, { stock: number; low_stock: boolean }>>({});
 
   // Modal de pago
   const [isPayOpen, setIsPayOpen] = useState(false);
@@ -1700,7 +1764,8 @@ export default function NuevaVentaPage() {
     return undefined;
   }, [profile?.full_name, user?.email]);
   const businessCategory = (org?.business_category ?? "").toLowerCase() || null;
-  const isRestaurantBusiness = businessCategory ? RESTAURANT_BUSINESS_IDS.has(businessCategory) : false;
+  const isRestaurantBusiness = isRestaurantCategory(businessCategory);
+  const isStoreBusiness = isStoreCategory(businessCategory);
   const isExchangeBusiness = businessCategory
     ? EXCHANGE_BUSINESS_IDS.has(businessCategory)
     : false;
@@ -2299,6 +2364,29 @@ export default function NuevaVentaPage() {
       }));
       setProducts(normalizedProducts as DBProduct[]);
       setByCat(map);
+
+      if (isStoreBusiness && currentLocationId) {
+        const productIds = normalizedProducts.map((p: any) => p.id);
+        if (productIds.length > 0) {
+          const { data: invRows } = await supabase
+            .from("product_variant_location_inventory")
+            .select("product_id, available_quantity, low_stock_threshold")
+            .eq("location_id", currentLocationId);
+
+          if (invRows) {
+            const invMap: Record<string, { stock: number; low_stock: boolean }> = {};
+            invRows.forEach((inv: any) => {
+              const stock = inv.available_quantity ?? 0;
+              const threshold = inv.low_stock_threshold ?? 5;
+              invMap[inv.product_id] = {
+                stock,
+                low_stock: stock <= threshold,
+              };
+            });
+            setInventoryMap(invMap);
+          }
+        }
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -3046,60 +3134,65 @@ export default function NuevaVentaPage() {
     });
   }
 
-  const cartSummary = useMemo(() => {
-    if (cart.length === 0) {
-      return {
-        subtotal: 0,
-        ivaTotal: 0,
-        incTotal: 0,
-        taxTotal: 0,
-        total: 0,
-        breakdown: [] as { label: string; amount: number }[],
-      };
-    }
+   const cartSummary = useMemo(() => {
+     if (cart.length === 0) {
+       return {
+         subtotal: 0,
+         ivaTotal: 0,
+         incTotal: 0,
+         taxTotal: 0,
+         total: 0,
+         breakdown: [] as { label: string; amount: number }[],
+       };
+     }
 
-    let subtotal = 0;
-    let ivaTotal = 0;
-    let incTotal = 0;
-    const breakdownMap = new Map<string, number>();
+     let subtotal = 0;
+     let ivaTotal = 0;
+     let incTotal = 0;
+     const breakdownMap = new Map<string, number>();
 
-    cart.forEach(({ product, qty, modifiers }) => {
-      const totals = computeTradeTotals(product, qty, modifiers);
-      subtotal += totals.base;
-      ivaTotal += totals.ivaAmount;
-      incTotal += totals.incAmount;
+     cart.forEach(({ product, qty, modifiers }) => {
+       const totals = computeTradeTotals(product, qty, modifiers);
+       subtotal += totals.base;
+       ivaTotal += totals.ivaAmount;
+       incTotal += totals.incAmount;
 
-      if (totals.ivaAmount > 0) {
-        const label = `IVA ${formatRate(totals.ivaRate)}%`;
-        const current = breakdownMap.get(label) ?? 0;
-        breakdownMap.set(label, round2(current + totals.ivaAmount));
-      }
+       if (totals.ivaAmount > 0) {
+         const label = `IVA ${formatRate(totals.ivaRate)}%`;
+         const current = breakdownMap.get(label) ?? 0;
+         breakdownMap.set(label, round2(current + totals.ivaAmount));
+       }
 
-      if (totals.incAmount > 0) {
-        const labelBase = formatIncTypeLabel(product.inc_type);
-        const label = `${labelBase} ${formatRate(totals.incRate)}%`.trim();
-        const current = breakdownMap.get(label) ?? 0;
-        breakdownMap.set(label, round2(current + totals.incAmount));
-      }
-    });
+       if (totals.incAmount > 0) {
+         const labelBase = formatIncTypeLabel(product.inc_type);
+         const label = `${labelBase} ${formatRate(totals.incRate)}%`.trim();
+         const current = breakdownMap.get(label) ?? 0;
+         breakdownMap.set(label, round2(current + totals.incAmount));
+       }
+     });
 
-    const taxTotal = round2(ivaTotal + incTotal);
-    const total = round2(subtotal + taxTotal);
+     const taxTotal = round2(ivaTotal + incTotal);
+     let total = round2(subtotal + taxTotal);
+     
+     // Apply promotion discount to the total
+     if (appliedPromotion) {
+       total = Math.max(0, total - appliedPromotion.discountAmount);
+     }
 
-    const breakdown = Array.from(breakdownMap.entries()).map(([label, amount]) => ({
-      label,
-      amount: round2(amount),
-    }));
+     const breakdown = Array.from(breakdownMap.entries()).map(([label, amount]) => ({
+       label,
+       amount: round2(amount),
+     }));
 
-    return {
-      subtotal: round2(subtotal),
-      ivaTotal: round2(ivaTotal),
-      incTotal: round2(incTotal),
-      taxTotal,
-      total,
-      breakdown,
-    };
-  }, [cart, computeTradeTotals]);
+     return {
+       subtotal: round2(subtotal),
+       ivaTotal: round2(ivaTotal),
+       incTotal: round2(incTotal),
+       taxTotal,
+       total,
+       breakdown,
+     };
+   }, [cart, computeTradeTotals, appliedPromotion]);
 
   const effectiveTipPercentage = useMemo(
     () => (isExchangeBusiness ? 0 : tipPercentage),
@@ -3111,10 +3204,13 @@ export default function NuevaVentaPage() {
     return round2(cartSummary.subtotal * (effectiveTipPercentage / 100));
   }, [cartSummary.subtotal, effectiveTipPercentage]);
 
-  const totalDue = useMemo(
-    () => round2(cartSummary.total + tipAmount),
-    [cartSummary.total, tipAmount]
-  );
+   const totalDue = useMemo(
+     () => {
+       const promotionDiscount = appliedPromotion ? appliedPromotion.discountAmount : 0;
+       return Math.max(0, round2(cartSummary.total + tipAmount - promotionDiscount));
+     },
+     [cartSummary.total, tipAmount, appliedPromotion]
+   );
   const kycThresholdUsd = 100;
   const exceedsKycThreshold = isExchangeBusiness && totalDue >= kycThresholdUsd;
   const projectedCustomerDailyTotalUsd = useMemo(
@@ -3902,36 +3998,48 @@ export default function NuevaVentaPage() {
         instructions: orderFields.instrucciones,
       };
 
-      const { data: saleRow, error: saleError } = await supabase
-        .from("sales")
-        .update({
-          subtotal_amount: cartSummary.subtotal,
-          tax_iva_amount: cartSummary.ivaTotal,
-          tax_inc_amount: cartSummary.incTotal,
-          tax_other_amount: 0,
-          tip: tipAmount,
-          total_amount: totalDue,
-          grand_total: totalDue,
-          price_includes_taxes: priceIncludes,
-          notes,
-          shipping_address: shippingAddress,
-          delivery_metadata: {
-            ...orderMeta,
-            verificationCode,
-            kyc: isExchangeBusiness ? kycForm : null,
-            kyc_threshold_exceeded: exceedsKycThreshold,
-            kyc_daily_limit_exceeded: exceedsCustomerDailyLimit,
-            kyc_threshold_usd: kycThresholdUsd,
-          },
-          status: initialSaleStatus,
-          payment_method: fallbackPaymentMethod,
-          customer_id: activeCustomer?.id ?? null,
-          tip_percentage: effectiveTipPercentage,
-          verification_code: verificationCode,
-        })
-        .eq("id", activeDraftId)
-        .select("id, order_number, created_at")
-        .single();
+       // Calculate final total with promotion discount applied
+       const finalTotal = appliedPromotion 
+         ? Math.max(0, cartSummary.total + tipAmount - appliedPromotion.discountAmount) 
+         : cartSummary.total + tipAmount;
+       
+       const { data: saleRow, error: saleError } = await supabase
+         .from("sales")
+         .update({
+           subtotal_amount: cartSummary.subtotal,
+           tax_iva_amount: cartSummary.ivaTotal,
+           tax_inc_amount: cartSummary.incTotal,
+           tax_other_amount: 0,
+           tip: tipAmount,
+           total_amount: finalTotal,
+           grand_total: finalTotal,
+           price_includes_taxes: priceIncludes,
+           notes,
+           shipping_address: shippingAddress,
+           delivery_metadata: {
+             ...orderMeta,
+             verificationCode,
+             kyc: isExchangeBusiness ? kycForm : null,
+             kyc_threshold_exceeded: exceedsKycThreshold,
+             kyc_daily_limit_exceeded: exceedsCustomerDailyLimit,
+             kyc_threshold_usd: kycThresholdUsd,
+             // Store promotion info in metadata for tracking
+             promotion_applied: appliedPromotion ? {
+               id: appliedPromotion.id,
+               name: appliedPromotion.name,
+               discount_amount: appliedPromotion.discountAmount,
+               type: appliedPromotion.type
+             } : null,
+           },
+           status: initialSaleStatus,
+           payment_method: fallbackPaymentMethod,
+           customer_id: activeCustomer?.id ?? null,
+           tip_percentage: effectiveTipPercentage,
+           verification_code: verificationCode,
+         })
+         .eq("id", activeDraftId)
+         .select("id, order_number, created_at")
+         .single();
 
       if (saleError) throw saleError;
 
@@ -5194,6 +5302,16 @@ export default function NuevaVentaPage() {
                           {currency(
                             resolveTradePrice(p) ?? Number(p.price ?? 0)
                           )}
+                          {isStoreBusiness && inventoryMap[p.id] && (
+                            <span className={cn(
+                              "ml-2 text-xs px-1.5 py-0.5 rounded-full",
+                              inventoryMap[p.id].low_stock
+                                ? "bg-red-100 text-red-700"
+                                : "bg-green-100 text-green-700"
+                            )}>
+                              {inventoryMap[p.id].stock} uds
+                            </span>
+                          )}
                         </div>
                       </button>
                     ))}
@@ -5596,48 +5714,73 @@ export default function NuevaVentaPage() {
       />
 
       {/* -------- Modal de Pago -------- */}
-      <SaleConfirmModal
-        mode={tradeMode}
-        isOpen={isPayOpen}
-        onClose={() => setIsPayOpen(false)}
-        paymentStage={paymentStage}
-        cartSummary={cartSummary}
-        tipAmount={tipAmount}
-        tipPercentage={effectiveTipPercentage}
-        setTipPercentage={handleTipPercentageChange}
-        tipChoices={TIP_CHOICES}
-        formatRate={formatRate}
-        currency={currency}
-        totalDue={totalDue}
-        primaryPaymentOptions={PRIMARY_PAYMENT_OPTIONS}
-        primaryPaymentOption={primaryPaymentOption}
-        onSelectPrimaryPayment={handleSelectPrimaryPayment}
-        paymentDrafts={paymentDrafts}
-        paymentEntryInfo={paymentEntryInfo}
-        updatePaymentDraft={updatePaymentDraft}
-        paymentMethodOptions={PAYMENT_METHOD_SELECT_OPTIONS}
-        combinedFirstAmountRef={combinedFirstAmountRef}
-        singleCashReceivedRef={singleCashReceivedRef}
-        singleReferenceRef={singleReferenceRef}
-        addCombinedPaymentDraft={addCombinedPaymentDraft}
-        removePaymentDraft={removePaymentDraft}
-        paymentMethodLabels={PAYMENT_METHOD_LABELS}
-        round2={round2}
-        hasCashEntry={hasCashEntry}
-        paymentAnalysis={paymentAnalysis}
-        paymentBalanceOk={paymentBalanceOk}
-        paymentMissingAbs={paymentMissingAbs}
-        paymentIsShort={paymentIsShort}
-        paymentIsOver={paymentIsOver}
-        openCashDrawer={openCashDrawer}
-        printReceipt={printReceipt}
-        setOpenCashDrawer={setOpenCashDrawer}
-        onTogglePrintReceipt={handlePrintPreferenceChange}
-        resetPaymentFlow={resetPaymentFlow}
-        savingSale={savingSale}
-        finalizeAndPrint={finalizeAndPrint}
-        canFinalizePayment={canFinalizePayment}
-      />
+       <SaleConfirmModal
+         mode={tradeMode}
+         isOpen={isPayOpen}
+         onClose={() => setIsPayOpen(false)}
+         paymentStage={paymentStage}
+         cartSummary={cartSummary}
+         tipAmount={tipAmount}
+         tipPercentage={effectiveTipPercentage}
+         setTipPercentage={handleTipPercentageChange}
+         tipChoices={TIP_CHOICES}
+         formatRate={formatRate}
+         currency={currency}
+         totalDue={totalDue}
+         primaryPaymentOptions={PRIMARY_PAYMENT_OPTIONS}
+         primaryPaymentOption={primaryPaymentOption}
+         onSelectPrimaryPayment={handleSelectPrimaryPayment}
+         paymentDrafts={paymentDrafts}
+         paymentEntryInfo={paymentEntryInfo}
+         updatePaymentDraft={updatePaymentDraft}
+         paymentMethodOptions={PAYMENT_METHOD_SELECT_OPTIONS}
+         combinedFirstAmountRef={combinedFirstAmountRef}
+         singleCashReceivedRef={singleCashReceivedRef}
+         singleReferenceRef={singleReferenceRef}
+         addCombinedPaymentDraft={addCombinedPaymentDraft}
+         removePaymentDraft={removePaymentDraft}
+         paymentMethodLabels={PAYMENT_METHOD_LABELS}
+         round2={round2}
+         hasCashEntry={hasCashEntry}
+         paymentAnalysis={paymentAnalysis}
+         paymentBalanceOk={paymentBalanceOk}
+         paymentMissingAbs={paymentMissingAbs}
+         paymentIsShort={paymentIsShort}
+         paymentIsOver={paymentIsOver}
+         openCashDrawer={openCashDrawer}
+         printReceipt={printReceipt}
+         setOpenCashDrawer={setOpenCashDrawer}
+         onTogglePrintReceipt={handlePrintPreferenceChange}
+         resetPaymentFlow={resetPaymentFlow}
+         savingSale={savingSale}
+         finalizeAndPrint={finalizeAndPrint}
+         canFinalizePayment={canFinalizePayment}
+         // Promotion and referral props
+         appliedPromotion={appliedPromotion}
+         promotionCode={promotionCode}
+         setPromotionCode={setPromotionCode}
+         referralCode={referralCode}
+         setReferralCode={setReferralCode}
+         validatingPromotion={validatingPromotion}
+         validatingReferral={validatingReferral}
+         promotionError={promotionError}
+         referralError={referralError}
+         handleValidatePromotion={handleValidatePromotion}
+         handleApplyPromotion={handleApplyPromotion}
+         clearAppliedPromotion={clearAppliedPromotion}
+         handleValidateReferral={handleValidateReferral}
+         handleApplyReferralRewards={handleApplyReferralRewards}
+         // Cart data for promotion validation
+         cart={cart.map(line => ({
+           product: {
+             id: line.product.id,
+             price: Number(line.product.price) || 0
+           },
+           qty: line.qty
+         }))}
+         selectedCustomer={selectedCustomer}
+         referralRewardApplied={referralRewardApplied}
+       />
 
       {activeShift && (
         <HorizontalCardList ref={draftsBarRef} className="pr-3">

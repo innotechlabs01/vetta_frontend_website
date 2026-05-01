@@ -6,9 +6,7 @@ import { createClient } from "@/utils/supabase/server";
 import { getSupabaseAdmin } from "@/utils/supabase/admin";
 import { User } from "@supabase/supabase-js";
 
-const MOCK_USER_ID = "50205784-0c11-4c8a-8a02-6184607e2a1a";
 const MOCK_USER_EMAIL = "anthonyrivera51@gmail.com";
-const MOCK_AUTH_ENABLED =
   process.env.NODE_ENV !== "production" &&
   process.env.NEXT_PUBLIC_MOCK_AUTH_USER === "true";
 
@@ -47,7 +45,33 @@ export type Environment = {
   currentLocationId: string | null;
   hasOrganizationLevelAccess: boolean;
   hasLocationLevelAccess: boolean;
+  // Menu configuration from DB
+  menuConfig: Array<{
+    path: string;
+    label: string;
+    icon_name: string;
+    is_active: boolean;
+    sort_order: number;
+  }>;
 };
+
+// cache() evita llamadas duplicadas a supabase.auth.getUser en la misma request
+export const getMenuConfig = cache(async (supabase: any, orgId: string | null) => {
+  if (!orgId) return [];
+  
+  const { data, error } = await supabase
+    .from('menu_config')
+    .select('path, label, icon_name, is_active, sort_order, parent_id, is_father, always_visible, visible_to_roles')
+    .eq('organization_id', orgId)
+    .order('sort_order', { ascending: true });
+  
+  if (error) {
+    console.error('Error fetching menu config:', error);
+    return [];
+  }
+  
+  return data || [];
+});
 
 // cache() evita llamadas duplicadas a supabase.auth.getUser en la misma request
 export const getEnvironment = cache(async (): Promise<Environment> => {
@@ -58,9 +82,7 @@ export const getEnvironment = cache(async (): Promise<Environment> => {
 
   // Perfil (siempre disponible si hay sesión)
   const { data: me } = await supabase.auth.getUser();
-  const user = me?.user ?? (MOCK_AUTH_ENABLED
-    ? ({ id: MOCK_USER_ID, email: MOCK_USER_EMAIL } as User)
-    : null);
+  const user = me?.user;
 
   let profile: ProfileInfo = {
     id: null,
@@ -96,7 +118,8 @@ export const getEnvironment = cache(async (): Promise<Environment> => {
       organizationLocations: [],
       currentLocationId: null,
       hasOrganizationLevelAccess: false,
-      hasLocationLevelAccess: false
+      hasLocationLevelAccess: false,
+      menuConfig: [],
     };
   }
 
@@ -110,7 +133,8 @@ export const getEnvironment = cache(async (): Promise<Environment> => {
       organizationLocations: [],
       currentLocationId: null,
       hasOrganizationLevelAccess: false,
-      hasLocationLevelAccess: false
+      hasLocationLevelAccess: false,
+      menuConfig: [],
     };
   }
 
@@ -134,7 +158,8 @@ export const getEnvironment = cache(async (): Promise<Environment> => {
       organizationLocations: [],
       currentLocationId: null,
       hasOrganizationLevelAccess: false,
-      hasLocationLevelAccess: false
+      hasLocationLevelAccess: false,
+      menuConfig: [],
     };
   }
 
@@ -193,8 +218,10 @@ export const getEnvironment = cache(async (): Promise<Environment> => {
     accessibleLocations,
     organizationLocations: allLocations ?? [],
     currentLocationId: locationId && memberLocationIds.includes(locationId) ? locationId : (hasOrgAccess ? null : memberLocationIds[0] ?? null),
-    hasOrganizationLevelAccess,
-    hasLocationLevelAccess
+    hasOrganizationLevelAccess: hasOrgAccess,
+    hasLocationLevelAccess,
+    // Fetch menu configuration
+    menuConfig: await getMenuConfig(supabase, orgId),
   };
 });
 

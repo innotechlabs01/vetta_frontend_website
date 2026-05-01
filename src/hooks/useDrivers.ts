@@ -11,6 +11,7 @@ import type {
   UpdateDriverInput,
   CreateCommissionInput
 } from "@/types/drivers";
+import { validateDriver } from "@/utils/driver-validation";
 
 export function useDrivers(supabase: any, organizationId: string | null) {
   const [drivers, setDrivers] = useState<DriverWithCommission[]>([]);
@@ -62,6 +63,22 @@ export function useDrivers(supabase: any, organizationId: string | null) {
   const createDriver = useCallback(async (input: CreateDriverInput, commission?: CreateCommissionInput) => {
     setLoading(true);
     try {
+      // Validar antes de crear
+      const validation = await validateDriver({
+        organizationId: organizationId ?? "",
+        input,
+        supabase
+      });
+      
+      if (!validation.valid) {
+        // Mostrar todos los errores de validación
+        validation.errors.forEach(error => toast.error(error));
+        throw new Error(validation.errors.join(", "));
+      }
+      
+      // Mostrar warnings si los hay
+      validation.warnings.forEach(warning => toast.warning(warning));
+
       const inputWithDefault = {
         ...input,
         max_simultaneous_orders: input.max_simultaneous_orders || 1,
@@ -90,7 +107,10 @@ export function useDrivers(supabase: any, organizationId: string | null) {
       await fetchDrivers();
       return driverData;
     } catch (err: any) {
-      toast.error(err.message || "Error al crear domiciliarios");
+      // Si ya es un error de validación, no mostrar toast genérico
+      if (!err.message?.includes("Error al crear domiciliarios")) {
+        toast.error(err.message || "Error al crear domiciliarios");
+      }
       throw err;
     } finally {
       setLoading(false);
@@ -101,6 +121,28 @@ export function useDrivers(supabase: any, organizationId: string | null) {
     setLoading(true);
     try {
       const { id, ...updateData } = input;
+      
+      // Ensure name is not undefined for validation
+      if (updateData.name === undefined) {
+        delete updateData.name;
+      }
+      
+      // Validar antes de actualizar
+      const validation = await validateDriver({
+        organizationId: organizationId ?? "",
+        input: updateData as any, // Cast to avoid type issues temporarily
+        driverId: id,
+        supabase
+      });
+      
+      if (!validation.valid) {
+        // Mostrar todos los errores de validación
+        validation.errors.forEach(error => toast.error(error));
+        throw new Error(validation.errors.join(", "));
+      }
+      
+      // Mostrar warnings si los hay
+      validation.warnings.forEach(warning => toast.warning(warning));
 
       const { error: updateError } = await supabase
         .from("drivers")
@@ -126,7 +168,10 @@ export function useDrivers(supabase: any, organizationId: string | null) {
       toast.success("Domiciliario actualizado exitosamente");
       await fetchDrivers();
     } catch (err: any) {
-      toast.error(err.message || "Error al actualizar domiciliarios");
+      // Si ya es un error de validación, no mostrar toast genérico
+      if (!err.message?.includes("Error al actualizar domiciliarios")) {
+        toast.error(err.message || "Error al actualizar domiciliarios");
+      }
       throw err;
     } finally {
       setLoading(false);

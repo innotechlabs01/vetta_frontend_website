@@ -5,30 +5,20 @@ import { getSupabaseAdmin } from "@/utils/supabase/admin";
 
 const DEFAULT_NEXT = "/home";
 
-// SECURITY FIX: MOCK_USER_ID should NEVER be accessible in production
-// Only allowed in development mode with explicit feature flag
-const MOCK_AUTH_ENABLED = 
-  process.env.NODE_ENV === "development" && 
-  process.env.NEXT_PUBLIC_MOCK_AUTH_USER === "true";
-
-const MOCK_USER_ID = MOCK_AUTH_ENABLED 
-  ? "50205784-0c11-4c8a-8a02-6184607e2a1a" 
-  : null;
-
-function normalizeNext(raw: string | null): string {
-  if (typeof raw === "string" && raw.startsWith("/")) return raw;
-  return DEFAULT_NEXT;
+function normalizeNext(next: string | null): string {
+  if (!next || !next.startsWith("/")) return DEFAULT_NEXT;
+  return next;
 }
 
-async function hasMembership(orgId: string) {
+async function hasMembership(orgId: string): Promise<boolean> {
   const supabase = await createClient();
   const {
     data: { user },
     error: userError,
   } = await supabase.auth.getUser();
-  const effectiveUserId = user?.id ?? (MOCK_AUTH_ENABLED ? MOCK_USER_ID : null);
+  const effectiveUserId = user?.id;
 
-  if ((userError && !MOCK_AUTH_ENABLED) || !effectiveUserId) {
+  if (userError || !effectiveUserId) {
     return false;
   }
 

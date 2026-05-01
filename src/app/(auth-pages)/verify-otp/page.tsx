@@ -43,7 +43,7 @@ export default async function VerifyOtp(props: {
 
             <form className="flex flex-col w-full items-start">
 
-              <Image src={logo} alt="Logo recompry" className="h-[30px] w-auto mb-5" />
+              {/* <Image src={logo} alt="Logo recompry" className="h-[30px] w-auto mb-5" /> */}
 
               <div className="flex gap-1 flex-col mb-3" >
                 <h1 className="text-2xl font-semibold">Verificar código</h1>

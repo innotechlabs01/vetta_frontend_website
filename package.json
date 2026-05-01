@@ -32,6 +32,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
+    "leaflet": "^1.9.4",
     "lucide-react": "^0.482.0",
     "next": "^14.2.26",
     "next-pwa": "^5.6.0",
@@ -41,6 +42,7 @@
     "react-day-picker": "^9.11.1",
     "react-dom": "18.3.1",
     "react-hot-toast": "^2.5.2",
+    "react-leaflet": "^5.0.0",
     "react-number-format": "^5.4.4",
     "sharp": "^0.34.3",
     "sonner": "^2.0.7",
@@ -52,6 +54,7 @@
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250204.0",
     "@opennextjs/cloudflare": "0.5.3",
+    "@types/leaflet": "^1.9.21",
     "@types/node": "22.9.1",
     "@types/nprogress": "^0.2.3",
     "@types/react": "^18.3.12",
@@ -65,6 +68,7 @@
     "wrangler": "3.107.3"
   },
   "scripts": {
+    "predev": "rm -rf .next",
     "build": "next build",
     "cf:build:raw": "opennextjs-cloudflare",
     "cf:build": "node scripts/run-with-env.mjs .env.production.secrets npm run cf:build:raw",

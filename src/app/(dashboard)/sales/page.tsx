@@ -871,6 +871,19 @@ function FullscreenModal({ open, title, onClose, children }: FullscreenModalProp
 export default function SalesPage() {
   const { org } = useEnvironment();
   const organizationId = org?.id;
+  const businessCategory = (org?.business_category ?? "").toLowerCase();
+
+  const RESTAURANT_BUSINESS_IDS = new Set([
+    "restaurant", "restaurante", "cafe", "coffee_shop", "fast_food", "bar",
+  ]);
+  const STORE_BUSINESS_IDS = new Set([
+    "store", "supermarket", "boutique", "electronics", "hardware",
+    "beauty", "convenience", "pharmacy", "clinic",
+  ]);
+
+  const isRestaurantBusiness = RESTAURANT_BUSINESS_IDS.has(businessCategory);
+  const isStoreBusiness = STORE_BUSINESS_IDS.has(businessCategory);
+
   const supabase = useMemo(() => getSupabaseBrowser(), []);
   const { selected: printerSelection } = usePrinterContext();
 

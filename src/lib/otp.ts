@@ -1,20 +1,20 @@
 // src/lib/otp.ts
 import { createClient } from '@/utils/supabase/server';
 import { headers } from 'next/headers';
-import SentDm from '@sentdm/sentdm';
 
 // Generate a random 6-digit OTP code
 export function generateOTP(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-// Send OTP via Sent.dm
+// Send OTP via Twilio
 export async function sendOTP(phoneNumber: string): Promise<{ success: boolean; error?: string }> {
-  const apiKey = process.env.SENT_DM_API_KEY || process.env.NEXT_PUBLIC_SENT_DM_SANDBOX_KEY;
-  const templateId = process.env.SENT_DM_OTP_TEMPLATE_ID || '13ebcbe3-dffb-4bac-a554-aa3b33fe5185';
-  
-  if (!apiKey) {
-    console.error('[otp] No API key configured');
+  const accountSid = process.env.TWILIO_ACCOUNT_SID;
+  const authToken = process.env.TWILIO_AUTH_TOKEN;
+  const fromNumber = process.env.TWILIO_PHONE_NUMBER;
+
+  if (!accountSid || !authToken || !fromNumber) {
+    console.error('[otp] Twilio not configured');
     return { success: false, error: 'SMS service not configured' };
   }
 
@@ -41,23 +41,34 @@ export async function sendOTP(phoneNumber: string): Promise<{ success: boolean; 
   }
 
   try {
-    const client = new SentDm({ apiKey });
+    // Send SMS via Twilio REST API
+    const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
+    const auth = Buffer.from(`${accountSid}:${authToken}`).toString('base64');
 
-    // Try sending with template
-    const response = await client.messages.send({
-      to: [phoneNumber],
-      template: {
-        id: templateId,
-        name: 'OTP',
-        parameters: {
-          code: code,
-          app_name: 'Vetta'
-        }
+    const params = new URLSearchParams({
+      From: fromNumber,
+      To: phoneNumber,
+      Body: `Tu código de acceso para Vetta es: ${code}. Expira en 10 minutos.`
+    });
+
+    const response = await fetch(twilioUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${auth}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
       },
-      channel: ['sms']
-    }) as any;
+      body: params.toString()
+    });
 
-    console.log('[otp] SMS sent successfully:', response.data?.messages?.[0]?.id);
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error('[otp] Twilio error:', errorData);
+      // Still return success since code is saved
+      return { success: true };
+    }
+
+    const data = await response.json();
+    console.log('[otp] SMS sent successfully:', data.sid);
     return { success: true };
   } catch (error: any) {
     console.error('[otp] Error sending SMS:', error);

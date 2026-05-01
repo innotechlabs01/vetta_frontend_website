@@ -9,6 +9,7 @@ import type {
   PaymentMethod,
   PrimaryPaymentOption,
 } from "./types";
+import { toast } from "sonner";
 
 type CartSummary = {
   subtotal: number;
@@ -85,6 +86,32 @@ type SaleConfirmModalProps = {
   canFinalizePayment: boolean;
   onClose: () => void;
   confirmLabel?: string;
+  
+  // Promotion and referral props
+  appliedPromotion: {
+    id: string;
+    name: string;
+    discountAmount: number;
+    type: string;
+  } | null;
+  promotionCode: string;
+  setPromotionCode: (code: string) => void;
+  referralCode: string;
+  setReferralCode: (code: string) => void;
+  validatingPromotion: boolean;
+  validatingReferral: boolean;
+  promotionError: string | null;
+  referralError: string | null;
+  handleValidatePromotion: (cartItems: Array<{ productId: string; quantity: number; price: number }>, customerId: string | null) => Promise<boolean>;
+  handleApplyPromotion: (saleId: string, customerId: string | null) => Promise<any>;
+  clearAppliedPromotion: () => void;
+  handleValidateReferral: () => Promise<boolean>;
+  handleApplyReferralRewards: (referralId: string, customerId: string | null) => Promise<any>;
+  // Cart data for promotion validation
+  cart: Array<{ product: { id: string; price: number }; qty: number }>;
+  selectedCustomer: { id: string } | null;
+  // Referral reward status
+  referralRewardApplied: boolean;
 };
 
 export default function SaleConfirmModal({
@@ -129,6 +156,27 @@ export default function SaleConfirmModal({
   canFinalizePayment,
   onClose,
   confirmLabel,
+  
+  // Promotion and referral props
+  appliedPromotion,
+  promotionCode,
+  setPromotionCode,
+  referralCode,
+  setReferralCode,
+  validatingPromotion,
+  validatingReferral,
+  promotionError,
+  referralError,
+  handleValidatePromotion,
+  handleApplyPromotion,
+  clearAppliedPromotion,
+  handleValidateReferral,
+  handleApplyReferralRewards,
+  // Cart data for promotion validation
+  cart,
+  selectedCustomer,
+  // Referral reward status
+  referralRewardApplied,
 }: SaleConfirmModalProps) {
   if (!isOpen) return null;
 
@@ -152,6 +200,12 @@ export default function SaleConfirmModal({
         <div className="flex justify-between text-sm text-gray-600">
           <span>{`Servicio ${formatRate(tipPercentage)}%`}</span>
           <span>${" "}{currency(tipAmount)}</span>
+        </div>
+      )}
+      {appliedPromotion && (
+        <div className="flex justify-between text-sm text-red-600">
+          <span>Descuento ({appliedPromotion.name})</span>
+          <span>-${" "}{currency(appliedPromotion.discountAmount)}</span>
         </div>
       )}
       {cartSummary.breakdown.length === 0 ? (
@@ -268,27 +322,129 @@ export default function SaleConfirmModal({
           </button>
         </div>
 
-        <AnimatedHeight className="mt-5">
-          <div className="space-y-4">
-            {paymentStage === "method" ? (
-              <>
-                {methodSection}
-                {!isPurchase ? tipSection : null}
-                {summarySection}
-                <div className="flex justify-end pt-4">
-                  <button
-                    type="button"
-                    className="rounded-xl border px-4 py-2 text-sm text-gray-600 transition hover:bg-gray-50"
-                    onClick={onClose}
-                  >
-                    Cancelar
-                  </button>
+       <AnimatedHeight className="mt-5">
+        <div className="space-y-4">
+          {paymentStage === "method" ? (
+            <>
+              {methodSection}
+              {!isPurchase ? tipSection : null}
+              {summarySection}
+              {/* Promotion and Referral Section */}
+              <div className="bg-gray-50 rounded-xl p-4 space-y-3">
+                <h3 className="font-medium mb-2">Promociones y Referidos</h3>
+                <div className="space-y-2">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <label className="text-sm font-medium">Código de promoción:</label>
+                    <div className="flex-1 min-w-0">
+                      <input
+                        type="text"
+                        value={promotionCode}
+                        onChange={(e) => setPromotionCode(e.target.value)}
+                        placeholder="Ingresa código de promoción"
+                        className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        disabled={validatingPromotion}
+                      />
+                      {validatingPromotion && (
+                        <div className="flex items-center gap-2 mt-1 text-xs text-blue-600">
+                          Validando...
+                        </div>
+                      )}
+                      {!validatingPromotion && promotionError && (
+                        <div className="flex items-center gap-2 mt-1 text-xs text-red-600">
+                          {promotionError}
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      onClick={async () => {
+                        const cartItems = cart.map(line => ({
+                          productId: line.product.id,
+                          quantity: line.qty,
+                          price: line.product.price
+                        }));
+                        const customerId = selectedCustomer?.id ?? null;
+                        const isValid = await handleValidatePromotion(cartItems, customerId);
+                        if (isValid) {
+                          toast.success('Promoción aplicada');
+                        }
+                      }}
+                      disabled={validatingPromotion || !promotionCode.trim()}
+                      className="mt-4 sm:mt-0 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50"
+                    >
+                      {validatingPromotion ? 'Validando...' : 'Aplicar promoción'}
+                    </button>
+                  </div>
+                  {appliedPromotion && (
+                    <div className="bg-green-50 rounded-lg p-3">
+                      <div className="flex justify-between text-sm">
+                        <span>Descuento aplicado:</span>
+                        <span className="font-medium text-green-600">-${currency(appliedPromotion.discountAmount)}</span>
+                      </div>
+                      <div className="flex justify-between text-xs text-gray-500 mt-1">
+                        <span>{appliedPromotion.name}</span>
+                        <span>{appliedPromotion.type}</span>
+                      </div>
+                    </div>
+                  )}
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <label className="text-sm font-medium">Código de referido:</label>
+                    <div className="flex-1 min-w-0">
+                      <input
+                        type="text"
+                        value={referralCode}
+                        onChange={(e) => setReferralCode(e.target.value)}
+                        placeholder="Ingresa código de referido"
+                        className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        disabled={validatingReferral}
+                      />
+                      {validatingReferral && (
+                        <div className="flex items-center gap-2 mt-1 text-xs text-blue-600">
+                          Validando...
+                        </div>
+                      )}
+                      {!validatingReferral && referralError && (
+                        <div className="flex items-center gap-2 mt-1 text-xs text-red-600">
+                          {referralError}
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      onClick={async () => {
+                        const isValid = await handleValidateReferral();
+                        if (isValid) {
+                          toast.success('Código de referido válido');
+                        }
+                      }}
+                      disabled={validatingReferral || !referralCode.trim()}
+                      className="mt-4 sm:mt-0 px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 disabled:opacity-50"
+                    >
+                      {validatingReferral ? 'Validando...' : 'Validar referido'}
+                    </button>
+                  </div>
+                  {referralRewardApplied && (
+                    <div className="bg-blue-50 rounded-lg p-3 mt-2">
+                      <div className="flex justify-between text-sm">
+                        <span>Recompensa de referido aplicada:</span>
+                        <span className="font-medium text-blue-600">+10.00</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </>
-            ) : (
-              <>
-                {primaryPaymentOption === "combined" ? (
-                  <div className="space-y-3">
+              </div>
+              <div className="flex justify-end pt-4">
+                <button
+                  type="button"
+                  className="rounded-xl border px-4 py-2 text-sm text-gray-600 transition hover:bg-gray-50"
+                  onClick={onClose}
+                >
+                  Cancelar
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              {primaryPaymentOption === "combined" ? (
+                <div className="space-y-3">
                   <div className="justify-between flex items-center" >
                     <span>
                       <span className="text-sm text-gray-500">

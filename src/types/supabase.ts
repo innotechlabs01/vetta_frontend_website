@@ -6318,6 +6318,7 @@ export type Database = {
       create_default_org:
         | { Args: { p_org_name?: string }; Returns: string }
         | { Args: { p_org_name?: string; p_slug?: string }; Returns: string }
+        | { Args: { p_org_name?: string; p_slug?: string; p_business_category?: string }; Returns: string }
       current_org_id: { Args: never; Returns: string }
       deactivate_expired_loyalty_rewards: {
         Args: never

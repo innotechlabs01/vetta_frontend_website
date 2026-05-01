@@ -7,6 +7,7 @@ import {
   AlertCircle,
   CalendarIcon,
   Coins,
+  MapPin,
   ShoppingBag,
   TrendingUp,
   Users,
@@ -17,6 +18,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useEnvironment } from "@/context/EnvironmentContext";
 import { getSupabaseBrowser } from "@/utils/supabase/client";
+import { cn } from "@/lib/utils";
 import type { DBCustomer } from "@/types/customers";
 
 type TimeRange = "today" | "this_week" | "this_month" | "this_semester";
@@ -670,10 +672,17 @@ function TopCustomersList({ items }: TopCustomersListProps) {
 }
 
 export default function DashboardHomePage() {
-  const { org } = useEnvironment();
+  const { org, locationAccess, isAdmin } = useEnvironment();
   const organizationId = org?.id ?? null;
   const supabase = useMemo(() => getSupabaseBrowser(), []);
 
+  const canViewAllLocations = locationAccess.canAccessAllLocations;
+  const userLocations = locationAccess.currentLocation ? [locationAccess.currentLocation] : [];
+  const currentLocation = locationAccess.currentLocation;
+
+  const [selectedLocationId, setSelectedLocationId] = useState<string | null>(
+    canViewAllLocations ? null : currentLocation?.id ?? null
+  );
   const [timeRange, setTimeRange] = useState<TimeRange>("this_month");
   const [rangeMode, setRangeMode] = useState<"preset" | "custom">("preset");
   const [customRange, setCustomRange] = useState<DateRange | undefined>();
@@ -712,30 +721,39 @@ export default function DashboardHomePage() {
 
     try {
       const [salesResponse, customersResponse, totalCustomersResponse] = await Promise.all([
-        supabase
-          .from("sales")
-          .select(
-            `
-            id,
-            created_at,
-            status,
-            grand_total,
-            subtotal_amount,
-            discount_total_amount,
-            tax_iva_amount,
-            tax_inc_amount,
-            tax_other_amount,
-            tip,
-            tip_percentage,
-            customer_id,
-            customer:customers ( id, name, created_at )
-          `,
-          )
-          .eq("organization_id", organizationId)
-          .gte("created_at", startIso)
-          .lte("created_at", endIso)
-          .order("created_at", { ascending: true })
-          .limit(1000),
+        (async () => {
+          let query = supabase
+            .from("sales")
+            .select(
+              `
+              id,
+              created_at,
+              status,
+              grand_total,
+              subtotal_amount,
+              discount_total_amount,
+              tax_iva_amount,
+              tax_inc_amount,
+               tax_other_amount,
+               tip,
+               tip_percentage,
+               customer_id,
+               store_id,
+               customer:customers ( id, name, created_at )
+            `,
+            )
+            .eq("organization_id", organizationId)
+            .gte("created_at", startIso)
+            .lte("created_at", endIso)
+            .order("created_at", { ascending: true })
+            .limit(1000);
+          
+          if (selectedLocationId) {
+            query = query.eq("store_id", selectedLocationId);
+          }
+          
+          return query;
+        })(),
         supabase
           .from("customers")
           .select("id, name, created_at, is_loyal")
@@ -799,7 +817,7 @@ export default function DashboardHomePage() {
         setLoading(false);
       }
     }
-  }, [activeRange, organizationId, supabase]);
+  }, [activeRange, organizationId, supabase, selectedLocationId]);
 
   useEffect(() => {
     void fetchDashboard();
@@ -949,20 +967,46 @@ export default function DashboardHomePage() {
           </div>
         </header>
 
-        <div className="flex items-center justify-between gap-2 md:flex-row md:flex-wrap md:gap-3">
-          <CustomRangeDropdown
-            value={customRange}
-            onApply={handleApplyCustomRange}
-            onClear={handleClearCustomRange}
-            isActive={rangeMode === "custom" && Boolean(customRange?.from && customRange?.to)}
-            disabled={loading}
-          />
-          <div className="w-[46%] md:w-auto">
-            <TimeRangeSelector
-              value={rangeMode === "preset" ? timeRange : null}
-              onChange={handleTimeRangeChange}
+        <div className="flex flex-col gap-2 md:flex-row md:flex-wrap md:items-center md:justify-between md:gap-4">
+          <div className="flex items-center gap-3">
+            {canViewAllLocations && userLocations.length > 0 && (
+              <select
+                value={selectedLocationId ?? ""}
+                onChange={(e) => setSelectedLocationId(e.target.value || null)}
+                disabled={loading}
+                className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700"
+              >
+                <option value="">Todas las sucursales</option>
+                {userLocations.map((loc: any) => (
+                  <option key={loc.id} value={loc.id}>
+                    {loc.name}
+                  </option>
+                ))}
+              </select>
+            )}
+            {!canViewAllLocations && currentLocation && (
+              <div className="flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700">
+                <MapPin className="h-4 w-4" />
+                {currentLocation.name}
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center justify-end gap-2 md:flex-row md:flex-wrap md:gap-3">
+            <CustomRangeDropdown
+              value={customRange}
+              onApply={handleApplyCustomRange}
+              onClear={handleClearCustomRange}
+              isActive={rangeMode === "custom" && Boolean(customRange?.from && customRange?.to)}
               disabled={loading}
             />
+            <div className="w-[46%] md:w-auto">
+              <TimeRangeSelector
+                value={rangeMode === "preset" ? timeRange : null}
+                onChange={handleTimeRangeChange}
+                disabled={loading}
+              />
+            </div>
           </div>
         </div>
 

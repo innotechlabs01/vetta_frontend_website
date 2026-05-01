@@ -8,6 +8,7 @@ import {
   Globe, Instagram, Facebook, Twitter, Linkedin, Youtube, Loader2
 } from "lucide-react";
 import { upsertOrgSettingsAction } from "../../../actions";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -149,15 +150,40 @@ type AllowedBusinessCategory =
   | "coffee_shop"
   | "online_store"
   | "currency_exchange"
+  | "store"
+  | "supermarket"
+  | "boutique"
+  | "electronics"
+  | "hardware"
+  | "beauty"
+  | "convenience"
+  | "fast_food"
+  | "bar"
+  | "clinic"
+  | "gym"
   | "other";
 
-const BUSINESS_CATEGORIES: { value: AllowedBusinessCategory; label: string }[] = [
-  { value: "pharmacy", label: "Pharmacy" },
-  { value: "restaurant", label: "Restaurant" },
-  { value: "coffee_shop", label: "Coffee shop" }, // “Cafetería” en inglés
-  { value: "online_store", label: "Online store" },
-  { value: "currency_exchange", label: "Currency exchange" },
-  { value: "other", label: "Other" },
+const BUSINESS_CATEGORIES: { value: AllowedBusinessCategory; label: string; icon: string }[] = [
+  // Tiendas
+  { value: "store", label: "Tienda", icon: "🏪" },
+  { value: "supermarket", label: "Supermercado", icon: "🛒" },
+  { value: "boutique", label: "Boutique", icon: "👗" },
+  { value: "electronics", label: "Electrónicos", icon: "📱" },
+  { value: "hardware", label: "Ferretería", icon: "🔧" },
+  { value: "beauty", label: "Belleza", icon: "💄" },
+  { value: "convenience", label: "Miscelánea", icon: "🗃️" },
+  // Alimentación
+  { value: "restaurant", label: "Restaurante", icon: "🍽️" },
+  { value: "coffee_shop", label: "Cafetería", icon: "☕" },
+  { value: "fast_food", label: "Comida Rápida", icon: "🍔" },
+  { value: "bar", label: "Bar", icon: "🍺" },
+  // Servicios
+  { value: "pharmacy", label: "Farmacia", icon: "💊" },
+  { value: "clinic", label: "Clínica", icon: "🏥" },
+  { value: "gym", label: "Gimnasio", icon: "💪" },
+  { value: "online_store", label: "Tienda Online", icon: "🌐" },
+  { value: "currency_exchange", label: "Cambio de Divisas", icon: "💱" },
+  { value: "other", label: "Otro", icon: "📦" },
 ];
 
 function GeneralForm({
@@ -291,23 +317,30 @@ function GeneralForm({
         </div>
       </div>
 
-      {/* 👇 Selector de categoría */}
+      {/* 👇 Selector de categoría visual */}
       <div>
         <Label>Categoría del negocio</Label>
-        <div className="mt-2">
-          <select
-            className="w-full rounded-md border px-3 py-2 text-sm"
-            value={form.business_category}
-            onChange={(e) => setForm((f) => ({ ...f, business_category: e.target.value as AllowedBusinessCategory }))}
-          >
-            {BUSINESS_CATEGORIES.map(opt => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
+        <div className="mt-2 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
+          {BUSINESS_CATEGORIES.map(opt => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => setForm((f) => ({ ...f, business_category: opt.value }))}
+              className={cn(
+                "flex flex-col items-center justify-center gap-1 p-3 rounded-lg border-2 transition-all",
+                "hover:border-primary/50 hover:bg-primary/5",
+                form.business_category === opt.value
+                  ? "border-primary bg-primary/10"
+                  : "border-border"
+              )}
+            >
+              <span className="text-2xl">{opt.icon}</span>
+              <span className="text-xs font-medium text-center leading-tight">{opt.label}</span>
+            </button>
+          ))}
         </div>
-        <p className="text-xs text-muted-foreground mt-1">
-          Selecciona la categoría principal: Pharmacy, Restaurant, Coffee shop, Online store,
-          Currency exchange u Other.
+        <p className="text-xs text-muted-foreground mt-2">
+          Selecciona la categoría principal de tu negocio.
         </p>
       </div>
 

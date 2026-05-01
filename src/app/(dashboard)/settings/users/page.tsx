@@ -6,9 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, RefreshCcw, Plus, User, Trash2 } from "lucide-react";
+import { Loader2, RefreshCcw, Plus, User, Trash2, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { CreateUserModal } from "./createuser";
+import { EditUserModal } from "./edituser";
 import Image from "next/image";
 import {
   AlertDialog,
@@ -32,6 +33,7 @@ type MemberRow = {
   email: string | null;
   phone?: string | null;
   location_ids: string[] | null;
+  menu_access?: Array<{ label: string; path: string }>;
 };
 
 export default function UsersPage() {
@@ -45,6 +47,7 @@ export default function UsersPage() {
 
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmUser, setConfirmUser] = useState<MemberRow | null>(null);
+  const [editingUser, setEditingUser] = useState<MemberRow | null>(null);
 
   // Opcional: paginación
   const [page] = useState(1);
@@ -153,7 +156,8 @@ export default function UsersPage() {
               <TableHead>Teléfono</TableHead>
               <TableHead>Rol</TableHead>
               <TableHead>Sucursales</TableHead>
-              <TableHead className="w-[100px] text-right">Acciones</TableHead>
+              <TableHead>Menús</TableHead>
+              <TableHead className="w-[140px] text-right">Acciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -213,38 +217,69 @@ export default function UsersPage() {
                       </span>
                     )}
                   </TableCell>
+                  <TableCell>
+                    <div className="flex flex-wrap gap-1">
+                      {u.menu_access && u.menu_access.length > 0 ? (
+                        <>
+                          {u.menu_access.slice(0, 2).map((menu: any, idx: number) => (
+                            <span key={idx} className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded">
+                              {menu.label}
+                            </span>
+                          ))}
+                          {u.menu_access.length > 2 && (
+                            <span className="text-xs text-muted-foreground" title={u.menu_access.slice(2).map((m: any) => m.label).join(', ')}>
+                              +{u.menu_access.length - 2} más
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </div>
+                  </TableCell>
                   <TableCell className="text-right">
-                    <AlertDialog open={!!confirmUser && confirmUser.user_id === u.user_id} onOpenChange={(open) => !open && setConfirmUser(null)}>
-                      <AlertDialogTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          disabled={isOwner || isDeleting}
-                          onClick={() => setConfirmUser(u)}
-                          title={isOwner ? "No puedes eliminar al owner" : "Eliminar usuario"}
-                        >
-                          {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Eliminar usuario</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            ¿Seguro que deseas eliminar a <b>{u.full_name ?? u.email ?? "este usuario"}</b> de la organización?
-                            Esta acción no se puede deshacer.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                          <AlertDialogAction
-                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                            onClick={() => handleDelete(u.user_id)}
+                    <div className="flex items-center justify-end gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setEditingUser(u)}
+                        disabled={isOwner}
+                        title={isOwner ? "No puedes editar al owner" : "Editar usuario"}
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </Button>
+                      <AlertDialog open={!!confirmUser && confirmUser.user_id === u.user_id} onOpenChange={(open) => !open && setConfirmUser(null)}>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            disabled={isOwner || isDeleting}
+                            onClick={() => setConfirmUser(u)}
+                            title={isOwner ? "No puedes eliminar al owner" : "Eliminar usuario"}
                           >
-                            Eliminar
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
+                            {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Eliminar usuario</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              ¿Seguro que deseas eliminar a <b>{u.full_name ?? u.email ?? "este usuario"}</b> de la organización?
+                              Esta acción no se puede deshacer.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                            <AlertDialogAction
+                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                              onClick={() => handleDelete(u.user_id)}
+                            >
+                              Eliminar
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
                   </TableCell>
                 </TableRow>
               );
@@ -252,6 +287,23 @@ export default function UsersPage() {
           </TableBody>
         </Table>
       </div>
+
+      {/* Modal Editar Usuario */}
+      <EditUserModal
+        open={!!editingUser}
+        onClose={() => setEditingUser(null)}
+        onSaved={() => {
+          setEditingUser(null);
+          fetchData();
+        }}
+        user={editingUser ? {
+          user_id: editingUser.user_id,
+          full_name: editingUser.full_name ?? null,
+          phone: editingUser.phone ?? null,
+          role: editingUser.role,
+          location_ids: editingUser.location_ids,
+        } : null}
+      />
 
       {/* Modal Crear Usuario */}
       <CreateUserModal

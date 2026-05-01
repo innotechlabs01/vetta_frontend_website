@@ -19,75 +19,69 @@ import {
   Bike,
 } from "lucide-react"
 import { createClient } from "@/utils/supabase/client"
-import { useEnvironment } from "@/context/EnvironmentContext";
+import { useEnvironment } from "@/context/EnvironmentContext"
 import { useSidebar } from "@/context/SidebarContext"
 import { SidebarTooltip } from "./sidebar-tooltip"
+import { getIcon } from "@/lib/icon-map"
 
 const isProd = process.env.NODE_ENV === "production"
 const safeHref = (href: string) => (isProd ? "/we-are-working" : href)
 
-const baseMenuItems = [
-  { label: "Inicio", href: "/home", icon: Home },
-  {
-    label: "Punto de Venta", href: "/pos/new", icon: StoreIcon,
-    /* items: [
-      { label: "Turnos", href: "/sales/suscriptions", icon: Clock },
-      { label: "Gestión de efectivo", href: "/sales/suscriptions", icon: DollarSign },
-      { label: "Devoluciones", href: "/sales/suscriptions", icon: ArrowDownUp },
-    ] */
-  },
-  
-  {
-    label: "Pedidos", href: "/sales", icon: ShoppingCart,
-    /* items: [
-      { label: "Suscripciones", href: safeHref("/sales/suscriptions"), icon: Dot },
-    ] */
-  },
-  
+// Build menu items from dynamic config
+const buildMenuFromConfig = (menuConfig: any[], memberRole: string | null) => {
+  if (!menuConfig || menuConfig.length === 0) {
+    // Fallback to default items if no config
+    const defaultItems = [
+      { label: "Inicio", href: "/home", icon: "Home" },
+      { label: "Punto de Venta", href: "/pos/new", icon: "Store" },
+      { label: "Pedidos", href: "/sales", icon: "ShoppingCart" },
+      { label: "Domicilios", href: "/deliveries", icon: "Bike" },
+      { label: "Clientes", href: "/customers", icon: "Users" },
+    ];
+    return defaultItems.map(item => ({
+      ...item,
+      icon: getIcon(item.icon),
+    }));
+  }
 
-  {
-    label: "Inventario", href: "/items", icon: Tag,
-    items: [
-      { label: "Modificadores", href: "/items/modifiers", icon: Dot },
-      { label: "Categorías", href: "/items/categories", icon: Dot },
-      //{ label: "Descuentos", href: "/items/discounts", icon: Dot },
-      { label: "Opciones", href: "/items/options", icon: Dot },
-      
-      //{ label: "Listas de precios", href: "/items/price-list", icon: Dot },
-      //{ label: "Ajustes de inventario", href: "/items/inventory-adjustment", icon: Dot },
-      { label: "Bodegas", href: "/items/warehouse", icon: Dot },
+  // Filter by active status, role-based visibility, and parent-child
+  const canSeeItem = (item: any) => {
+    if (!item.is_active) return false;
+    
+    // Always visible items (e.g., Inicio) - skip role check
+    if (item.always_visible) return true;
+    
+    // Check role-based visibility
+    const visibleRoles = item.visible_to_roles || ['owner', 'admin', 'manager', 'member', 'viewer'];
+    if (!visibleRoles.includes(memberRole || '')) return false;
+    
+    return true;
+  };
 
-      //{ label: "Planes de Suscripción", href: "/items/plans", icon: Dot },
-    ]
-  },
-  {
-    label: "Clientes", href: "/customers", icon: Users,
-    /* items: [
-      { label: "Segmentos", href: "/customers/segments", icon: Dot },
-    ] */
-  },
+  // Get top-level items (no parent)
+  const topLevel = menuConfig
+    .filter(item => !item.parent_id && canSeeItem(item))
+    .sort((a, b) => a.sort_order - b.sort_order);
 
-  {
-    label: "Online", href: "/online", icon: Globe,
-    items: [
-      { label: "General", href: "/online", icon: Dot, strict: true },
-      { label: "QR Codes", href: "/online/qr-codes", icon: Dot },
-    ]
-  },
-  {
-    label: "Domiciliarios", href: "/settings/drivers", icon: Bike,
-  },
-  //{ label: "Marketing", href: "/marketing", icon: Megaphone },
-  //{ label: "Fidelización", href: "/loyalty", icon: Star },
+  // Build hierarchy
+  return topLevel.map(item => {
+    const children = menuConfig
+      .filter(child => child.parent_id === item.id && canSeeItem(child))
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .map(child => ({
+        label: child.label,
+        href: child.path,
+        icon: getIcon(child.icon_name),
+      }));
 
-  ...(isProd ? [] : [{
-    label: "Informes", href: "/reports", icon: FileText,
-    items: [
-      { label: "Transacciones", href: "/reports/transactions", icon: Dot },
-      { label: "Balance", href: "/reports/balance", icon: Dot },
-    ]
-  }]),
-]
+    return {
+      label: item.label,
+      href: item.path,
+      icon: getIcon(item.icon_name),
+      ...(children.length > 0 && { items: children }),
+    };
+  });
+};
 
 const footerItems = [
   { label: "Configuraciones", redirect: "/settings/general", href: "/settings", icon: Settings },
@@ -97,7 +91,7 @@ const footerItems = [
 type OrgRow = { id: string; name: string; slug: string | null }
 
 const Sidebar = () => {
-  const { org, profile, user, organizationLocations, currentLocationId, hasOrganizationLevelAccess, locationAccess } = useEnvironment()
+  const { org, profile, user, organizationLocations, currentLocationId, hasOrganizationLevelAccess, locationAccess, menuConfig } = useEnvironment()
   const supabase = useMemo(() => createClient(), [])
   const router = useRouter()
   const pathname = usePathname()
@@ -128,22 +122,18 @@ const Sidebar = () => {
   // Avatar
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
 
-  // Build menuItems based on user permissions
+  // Build menuItems based on user role and dynamic config
+  const { memberRole } = useEnvironment();
+  
   const menuItems = useMemo(() => {
-    const items = [...baseMenuItems];
-    
-    // Add organization dashboard link for owners/admins
-    if (hasOrganizationLevelAccess) {
-      items.splice(1, 0, { label: "Dashboard Org", href: "/organization/dashboard", icon: Globe });
-      
-      // Add location dashboard if multiple locations
-      if (organizationLocations.length > 1) {
-        items.splice(2, 0, { label: "Por Sucursal", href: "/location/dashboard", icon: StoreIcon });
-      }
-    }
-    
-    return items;
-  }, [hasOrganizationLevelAccess, organizationLocations]);
+    return buildMenuFromConfig(menuConfig || [], memberRole);
+  }, [menuConfig, memberRole]);
+
+  // Add admin-only items (Dashboard, etc.) after dynamic items
+  // Moved to menu_config table - no longer need to hardcode
+  const allMenuItems = useMemo(() => {
+    return menuItems;
+  }, [menuItems]);
 
   useEffect(() => {
     const parentWithChildren = menuItems.find(

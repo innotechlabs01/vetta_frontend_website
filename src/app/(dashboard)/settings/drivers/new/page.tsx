@@ -15,6 +15,7 @@ import { ArrowLeft, Loader2, User, Phone, Car, DollarSign, ToggleLeft, Package }
 import { toast } from "sonner";
 import Link from "next/link";
 import type { VehicleType, CommissionType } from "@/types/drivers";
+import { validateDriver } from "@/utils/driver-validation";
 
 export default function NewDriverPage() {
   const router = useRouter();
@@ -94,15 +95,34 @@ export default function NewDriverPage() {
         }
       : undefined;
 
+    // Validar antes de crear
     startTransition(async () => {
       try {
+        const validation = await validateDriver({
+          organizationId: orgId,
+          input: driverInput,
+          supabase
+        });
+        
+        if (!validation.valid) {
+          // Mostrar todos los errores de validación
+          validation.errors.forEach(error => toast.error(error));
+          return;
+        }
+        
+        // Mostrar warnings si los hay
+        validation.warnings.forEach(warning => toast.warning(warning));
+
         await createDriverAction(driverInput, commission);
         toast.success("Domiciliario creado exitosamente");
         router.refresh();
         router.push("/settings/drivers");
       } catch (err: any) {
         console.error("Error creating driver:", err);
-        toast.error(err.message || "Error al crear domiciliarios");
+        // Si ya es un error de validación, no mostrar toast genérico
+        if (!err.message?.includes("Error al crear domiciliarios")) {
+          toast.error(err.message || "Error al crear domiciliarios");
+        }
       }
     });
   };

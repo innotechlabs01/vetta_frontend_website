@@ -1,34 +1,26 @@
-"use server";
 
-import { encodedRedirect } from "../utils/utils";
-import { createClient } from "../utils/supabase/server";
-import { getSupabaseAdmin } from "../utils/supabase/admin";
-import { cookies, headers } from "next/headers";
+  "use server";
+
+import { createClient } from "@/utils/supabase/server";
+import { getSupabaseAdmin } from "@/utils/supabase/admin";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
 import crypto from "crypto";
+import { encodedRedirect } from "@/utils/utils";
+import { z } from "zod";
 
-// SECURITY FIX: MOCK_USER_ID should NEVER be accessible in production
-// BYPASS_OTP: Only for dev/QA to skip SMS verification
-const BYPASS_OTP = process.env.NEXT_PUBLIC_BYPASS_OTP === "true";
-
-const IS_DEV_OR_QA = process.env.NODE_ENV === "development" ||
-  process.env.NEXT_PUBLIC_ENVIRONMENT === "qa";
-
-const MOCK_USER_ID = BYPASS_OTP || IS_DEV_OR_QA
-  ? "50205784-0c11-4c8a-8a02-6184607e2a1a"
-  : null;
-
-// Función para crear JWT manual
+// Función para crear JWT manual compatible con Supabase
 function createManualJWT(userId: string, email: string, jwtSecret: string, issuer: string, expiresIn: string): string {
   const header = {
     alg: "HS256",
     typ: "JWT"
   };
-
+  
   const now = Math.floor(Date.now() / 1000);
   const exp = expiresIn === '1h' ? now + 3600 : now + 86400;
-
+  
   const payload = {
     iss: issuer + "/auth/v1",
     sub: userId,
@@ -41,17 +33,18 @@ function createManualJWT(userId: string, email: string, jwtSecret: string, issue
     user_metadata: {},
     role: "authenticated",
     aal: "aal1",
-    amr: [{ method: "password", timestamp: now }]
+    amr: [{ method: "password", timestamp: now }],
+    session_id: `session_${userId}_${now}` // <-- Esto es crucial para Supabase
   };
-
+  
   const base64Header = Buffer.from(JSON.stringify(header)).toString('base64url');
   const base64Payload = Buffer.from(JSON.stringify(payload)).toString('base64url');
-
+  
   const signature = crypto
     .createHmac('sha256', jwtSecret)
     .update(`${base64Header}.${base64Payload}`)
     .digest('base64url');
-
+  
   return `${base64Header}.${base64Payload}.${signature}`;
 }
 
@@ -169,27 +162,34 @@ export const signInAction = async (formData: FormData) => {
     return redirect(`/login?type=error&message=${encodeURIComponent("Número de teléfono inválido")}`);
   }
 
-  // Formato E.164 esperado por proveedores como Twilio Verify
+  // Formato E.164 esperado por Twilio
   const fullPhoneNumber = `${normalizedCountryCode}${normalizedPhoneNumber}`;
 
-  if (BYPASS_OTP) {
-    const phoneForRedirect = fullPhoneNumber.startsWith('+') ? fullPhoneNumber.substring(1) : fullPhoneNumber;
-    return redirect(`/verify-otp?phone=${encodeURIComponent(phoneForRedirect)}&status=otp_sent`);
+  // BYPASS: Omitir envío de OTP para números específicos
+  const BYPASS_PHONE = '+573116638572';
+  
+  if (fullPhoneNumber === BYPASS_PHONE) {
+    console.log("[bypass] Skipping OTP send for special phone:", fullPhoneNumber);
+    const phoneForRedirect = encodeURIComponent(fullPhoneNumber);
+    return redirect(`/verify-otp?phone=${phoneForRedirect}&status=otp_sent`);
   }
 
-  // Enviar OTP via Sent.dm
-  const { sendOTP } = await import('@/lib/otp');
-  const otpResult = await sendOTP(fullPhoneNumber);
+  // Enviar OTP via Supabase (Twilio) - Opción A
+  const { error } = await supabase.auth.signInWithOtp({
+    phone: fullPhoneNumber,
+    options: {
+      shouldCreateUser: true,
+    },
+  });
 
-  if (!otpResult.success) {
-    console.error("[auth:sms] Error sending OTP:", otpResult.error);
-    return redirect(`/login?type=error&message=${encodeURIComponent(otpResult.error || "Error al enviar código")}`);
+  if (error) {
+    console.error("[auth:sms] Error sending OTP:", error);
+    return redirect(`/login?type=error&message=${encodeURIComponent(error.message || "Error al enviar código")}`);
   }
 
-  console.info("[auth:sms] OTP sent successfully via Sent.dm", { phone: fullPhoneNumber });
+  console.info("[auth:sms] OTP sent successfully via Supabase/Twilio", { phone: fullPhoneNumber });
   const phoneForRedirect = fullPhoneNumber.startsWith('+') ? fullPhoneNumber.substring(1) : fullPhoneNumber;
   return redirect(`/verify-otp?phone=${encodeURIComponent(phoneForRedirect)}&status=otp_sent`);
-
 };
 
 export const forgotPasswordAction = async (formData: FormData) => {
@@ -324,7 +324,7 @@ export async function sendOtpAction(formData: FormData): Promise<any> {
   }
 }
 
-// Nueva acción para verificar OTP de SMS
+// Acción para verificar OTP de SMS - Usa Supabase nativo (Opción A)
 export async function verifySmsOtpAction(formData: FormData): Promise<any> {
   const phone = (formData.get("phone") as string) ?? "";
   const token = ((formData.get("otp") as string) ?? "").trim();
@@ -345,167 +345,84 @@ export async function verifySmsOtpAction(formData: FormData): Promise<any> {
     };
   }
 
-  // Asegurar que el teléfono tenga el formato correcto con +
   const normalizedPhone = phone.trim();
-  const fullPhoneNumber = normalizedPhone.startsWith('+') ? normalizedPhone : `+${normalizedPhone.replace(/\D/g, "")}`;
+  const fullPhoneNumber = normalizedPhone.startsWith('+') 
+    ? normalizedPhone 
+    : `+${normalizedPhone.replace(/\D/g, "")}`;
 
-  // BYPASS: En modo desarrollo/QA - crear sesión sin validar OTP
-  if (BYPASS_OTP || IS_DEV_OR_QA) {
+  // BYPASS: Omitir verificación para números específicos
+  const BYPASS_PHONE = '+573116638572';
+  const BYPASS_CODE = '123456';
+
+  if (fullPhoneNumber === BYPASS_PHONE && token === BYPASS_CODE) {
+    console.log("[bypass] Special bypass for phone:", fullPhoneNumber);
+    
     try {
       const admin = getSupabaseAdmin();
-      const supabase = await createClient();
-
-      console.log("[bypass] Starting bypass flow for phone:", fullPhoneNumber);
-
-      // 1. Intentar crear usuario primero
-      const tempEmail = `user_${Date.now()}@test.local`;
-
+      const tempEmail = `user_${Date.now()}@vetta.app`;
+      
       const { data: newUser, error: createError } = await admin.auth.admin.createUser({
         phone: fullPhoneNumber,
         email: tempEmail,
         user_metadata: {
           phone: fullPhoneNumber,
-          first_name: 'Test',
-          last_name: 'User'
         },
         email_confirm: true,
         phone_confirm: true,
       });
-
+      
       let userId: string;
-
-      console.log(`newUser: ${newUser}, createError: ${createError}`)
-
+      
       if (createError) {
-        // Si el teléfono ya existe, buscar el usuario
-        console.log("[bypass] User exists, finding by phone...");
-
         const foundUserId = await findUserIdByPhone(admin, fullPhoneNumber);
-
         if (!foundUserId) {
-          console.error("[bypass] User not found with phone:", fullPhoneNumber);
           return redirect("/login?type=error&message=Usuario no encontrado");
         }
-
         userId = foundUserId;
-        console.log("[bypass] Found user:", userId);
       } else if (newUser?.user) {
         userId = newUser.user.id;
-        console.log("[bypass] Created user:", userId);
       } else {
         return redirect("/login?type=error&message=Error al crear usuario");
       }
-
-      // 2. Generar tokens JWT manualmente
-      const jwtSecret = process.env.SUPABASE_JWT_SECRET;
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-
-      if (!jwtSecret || !supabaseUrl) {
-        console.error("[bypass] Missing JWT_SECRET or SUPABASE_URL");
-        return redirect("/login?type=error&message=Configuración faltante: SUPABASE_JWT_SECRET");
-      }
-
-      // Generar JWT manualmente
-      const accessToken = createManualJWT(userId, tempEmail, jwtSecret, supabaseUrl, '1h');
-      const refreshToken = `manual_refresh_${userId}_${Date.now()}`;
-
-      console.log("[bypass] Setting session with manual tokens...");
-
-      // 3. Establecer sesión
-      const { error: setError } = await supabase.auth.setSession({
-        access_token: accessToken,
-        refresh_token: refreshToken,
+      
+      // Usar Supabase nativo para verificar OTP (Opción A)
+      const { error: verifyError } = await supabase.auth.verifyOtp({
+        phone: fullPhoneNumber,
+        token: token,
+        type: 'sms',
       });
-
-      if (setError) {
-        console.error("[bypass] Set session error:", setError);
-        return redirect("/login?type=error&message=Error al establecer sesión");
+      
+      if (verifyError) {
+        console.error("[bypass] Verify error:", verifyError);
+        return redirect("/login?type=error&message=Error al verificar código");
       }
-
+      
       console.log("[bypass] Session created successfully! Redirecting to /org/select");
-
-      // Forzar la redirección de forma segura
-      return Response.redirect(new URL("/org/select", process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_APP_URL));
-
+      return redirect("/org/select");
+      
     } catch (err) {
       console.error("[bypass] Error:", err);
       return redirect("/login?type=error&message=Error en bypass");
     }
   }
 
-  // Flujo normal: verificar OTP realmente
+  // Flujo normal: Verificar OTP usando Supabase nativo
+  const { data, error } = await supabase.auth.verifyOtp({
+    phone: fullPhoneNumber,
+    token: token,
+    type: 'sms',
+  });
 
-  // Verificar OTP usando Sent.dm (custom verification)
-  const { verifyOTP } = await import('@/lib/otp');
-  const verifyResult = await verifyOTP(fullPhoneNumber, token);
-
-  if (!verifyResult.success) {
+  if (error) {
+    console.error("[verify] OTP verification error:", error);
     return redirect(
-      `/verify-otp?phone=${encodeURIComponent(phone)}&type=error&message=${encodeURIComponent(verifyResult.error || "Código inválido")}`
+      `/verify-otp?phone=${encodeURIComponent(phone)}&type=error&message=${encodeURIComponent(error.message || "Código inválido")}`
     );
   }
 
-  // OTP verificado - crear sesión
-  const admin = getSupabaseAdmin();
-  
-  // Buscar o crear usuario basado en teléfono
-  let userId: string;
-  
-  const foundUserId = await findUserIdByPhone(admin, fullPhoneNumber);
-  
-  if (foundUserId) {
-    userId = foundUserId;
-  } else {
-    // Crear usuario nuevo
-    const tempEmail = `user_${Date.now()}@vetta.app`;
-    const { data: newUser, error: createError } = await admin.auth.admin.createUser({
-      phone: fullPhoneNumber,
-      email: tempEmail,
-      user_metadata: {
-        phone: fullPhoneNumber,
-      },
-      email_confirm: true,
-      phone_confirm: true,
-    });
-    
-    if (createError || !newUser?.user) {
-      console.error("[verify] Error creating user:", createError);
-      return redirect(
-        `/verify-otp?phone=${encodeURIComponent(phone)}&type=error&message=Error al crear usuario`
-      );
-    }
-    userId = newUser.user.id;
-  }
-
-  // Crear sesión usando admin para obtener un token válido
-  // Generar un nuevo token usando el método de admin
-  const { data: sessionData, error: sessionError } = await admin.auth.admin.generateLink({
-    type: 'magiclink',
-    email: `user_${userId}@vetta.app`,
-  });
-
-  if (sessionError || !sessionData) {
-    console.error("[verify] Error generating session:", sessionError);
-    return redirect(
-      `/verify-otp?phone=${encodeURIComponent(phone)}&type=error&message=Error al crear sesión`
-    );
-  }
-
-  // Establecer la sesión con el token generado
-  const { error: setError } = await supabase.auth.setSession({
-    access_token: sessionData.properties.hashed_token,
-    refresh_token: sessionData.properties.hashed_token
-  });
-
-  if (setError) {
-    console.error("[verify] Set session error:", setError);
-    return redirect("/login?type=error&message=Error al establecer sesión");
-  }
-
+  // Sesión establecida automáticamente por Supabase
   console.log("[verify] Session created successfully! Redirecting to /org/select");
-
-  // Forzar la redirección de forma segura
-  return Response.redirect(new URL("/org/select", process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_APP_URL));
+  return redirect("/org/select");
 }
 
 // Acción para reenviar OTP por SMS
@@ -525,12 +442,6 @@ export async function resendSmsOtpAction(formData: FormData): Promise<any> {
   const fullPhoneNumber = normalizedPhone.startsWith("+")
     ? normalizedPhone
     : `+${normalizedPhone.replace(/\D/g, "")}`;
-
-  if (BYPASS_OTP) {
-    return redirect(
-      `/verify-otp?phone=${encodeURIComponent(phone)}&status=otp_resent`
-    );
-  }
 
   // Llamada a Sent.dm para reenviar OTP
   const { sendOTP } = await import('@/lib/otp');
@@ -646,11 +557,12 @@ export async function createOrgAction(formData: FormData) {
 
   const name = String(formData.get('name') || 'Mi negocio');
   const slug = String(formData.get('slug') || '');
+  const business_category = String(formData.get('business_category') || 'store');
 
-  // llama a tu RPC con el nombre de parámetro correcto
   const { data, error } = await supabase.rpc('create_default_org', {
     p_org_name: name,
-    p_slug: slug,              // <-- coincide con tu SQL (p_slug)
+    p_slug: slug,
+    p_business_category: business_category,
   });
   if (error) {
     throw new Error(error.message);
@@ -658,10 +570,143 @@ export async function createOrgAction(formData: FormData) {
 
   const orgId = data as string;
 
-  const c = cookies();         // cookies() es síncrono en Server Actions
+  const defaultChannels = getDefaultChannelsByCategory(business_category);
+
+  const { error: locError } = await supabase
+    .from('locations')
+    .insert({
+      organization_id: orgId,
+      name: 'Principal',
+      is_active: true,
+      is_online_store: defaultChannels.is_online_store,
+      pickup_enabled: defaultChannels.pickup_enabled,
+      local_delivery_enabled: defaultChannels.local_delivery_enabled,
+      shipping_enabled: defaultChannels.shipping_enabled,
+      prep_orders: true,
+    });
+
+  if (locError) {
+    console.error('Error creating default location:', locError);
+  }
+
+  const c = cookies();
   c.set('org_id', orgId, { path: '/', httpOnly: false });
 
-  redirect('/home');           // o a donde quieras
+  redirect('/home');
+}
+
+function getDefaultChannelsByCategory(category: string) {
+  const channels: Record<string, {
+    is_online_store: boolean;
+    pickup_enabled: boolean;
+    local_delivery_enabled: boolean;
+    shipping_enabled: boolean;
+  }> = {
+    restaurant: {
+      is_online_store: true,
+      pickup_enabled: true,
+      local_delivery_enabled: false,
+      shipping_enabled: false,
+    },
+    coffee_shop: {
+      is_online_store: true,
+      pickup_enabled: true,
+      local_delivery_enabled: false,
+      shipping_enabled: false,
+    },
+    fast_food: {
+      is_online_store: true,
+      pickup_enabled: true,
+      local_delivery_enabled: true,
+      shipping_enabled: false,
+    },
+    bar: {
+      is_online_store: true,
+      pickup_enabled: true,
+      local_delivery_enabled: false,
+      shipping_enabled: false,
+    },
+    store: {
+      is_online_store: true,
+      pickup_enabled: true,
+      local_delivery_enabled: true,
+      shipping_enabled: true,
+    },
+    supermarket: {
+      is_online_store: true,
+      pickup_enabled: true,
+      local_delivery_enabled: true,
+      shipping_enabled: true,
+    },
+    boutique: {
+      is_online_store: true,
+      pickup_enabled: true,
+      local_delivery_enabled: true,
+      shipping_enabled: true,
+    },
+    electronics: {
+      is_online_store: true,
+      pickup_enabled: true,
+      local_delivery_enabled: true,
+      shipping_enabled: true,
+    },
+    hardware: {
+      is_online_store: true,
+      pickup_enabled: true,
+      local_delivery_enabled: true,
+      shipping_enabled: true,
+    },
+    beauty: {
+      is_online_store: true,
+      pickup_enabled: true,
+      local_delivery_enabled: true,
+      shipping_enabled: true,
+    },
+    convenience: {
+      is_online_store: true,
+      pickup_enabled: true,
+      local_delivery_enabled: true,
+      shipping_enabled: true,
+    },
+    pharmacy: {
+      is_online_store: true,
+      pickup_enabled: true,
+      local_delivery_enabled: true,
+      shipping_enabled: true,
+    },
+    clinic: {
+      is_online_store: false,
+      pickup_enabled: false,
+      local_delivery_enabled: false,
+      shipping_enabled: false,
+    },
+    gym: {
+      is_online_store: false,
+      pickup_enabled: false,
+      local_delivery_enabled: false,
+      shipping_enabled: false,
+    },
+    online_store: {
+      is_online_store: true,
+      pickup_enabled: false,
+      local_delivery_enabled: false,
+      shipping_enabled: true,
+    },
+    currency_exchange: {
+      is_online_store: false,
+      pickup_enabled: false,
+      local_delivery_enabled: false,
+      shipping_enabled: false,
+    },
+    other: {
+      is_online_store: true,
+      pickup_enabled: true,
+      local_delivery_enabled: true,
+      shipping_enabled: false,
+    },
+  };
+
+  return channels[category] || channels.other;
 }
 
 export async function setOrgAction(formData: FormData) {
@@ -675,9 +720,9 @@ export async function setOrgAction(formData: FormData) {
     data: { user },
     error: userError,
   } = await supabase.auth.getUser();
-  const effectiveUserId = user?.id ?? (BYPASS_OTP ? MOCK_USER_ID : null);
+  const effectiveUserId = user?.id;
 
-  if ((userError && !BYPASS_OTP) || !effectiveUserId) {
+  if (!effectiveUserId) {
     throw new Error("Sesión inválida. Inicia sesión de nuevo.");
   }
 
@@ -746,8 +791,6 @@ function safeJson(v: FormDataEntryValue | null) {
     return null;
   }
 }
-
-import { z } from "zod";
 
 const schema = z.object({
   organizationId: z.string().uuid(),
@@ -879,6 +922,79 @@ export async function createOrgUserAction(input: unknown) {
       const { error: lmInsErr } = await supa.from("location_members").insert(toInsert);
       if (lmInsErr) throw lmInsErr;
     }
+  }
+
+  return { ok: true, userId };
+}
+
+export async function updateOrgUserAction(input: {
+  organizationId: string;
+  userId: string;
+  phone: string;
+  firstName?: string;
+  lastName?: string;
+  role: "owner" | "admin" | "manager" | "member";
+  locationIds?: string[];
+}) {
+  const { organizationId, userId, phone, firstName, lastName, role, locationIds = [] } = input;
+  const supa = getSupabaseAdmin();
+
+  // Update auth user metadata if name changed
+  if (firstName || lastName) {
+    await supa.auth.admin.updateUserById(userId, {
+      user_metadata: { first_name: firstName, last_name: lastName, phone },
+    });
+  }
+
+  // Update profile
+  const fullName = `${firstName ?? ""} ${lastName ?? ""}`.trim() || null;
+  const { error: profileErr } = await supa
+    .from("profiles")
+    .upsert({ user_id: userId, full_name: fullName, phone }, { onConflict: "user_id" });
+  if (profileErr) throw profileErr;
+
+  // Update or create organization member
+  const { data: existingMember } = await supa
+    .from("organization_members")
+    .select("role")
+    .eq("organization_id", organizationId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (existingMember) {
+    if (existingMember.role !== role) {
+      const { error } = await supa
+        .from("organization_members")
+        .update({ role })
+        .eq("organization_id", organizationId)
+        .eq("user_id", userId);
+      if (error) throw error;
+    }
+  } else {
+    const { error } = await supa
+      .from("organization_members")
+      .insert({ organization_id: organizationId, user_id: userId, role });
+    if (error) throw error;
+  }
+
+  // Update location members
+  if (!["owner", "admin"].includes(role)) {
+    if (!locationIds.length) {
+      throw new Error("Selecciona al menos una sucursal para este rol");
+    }
+
+    await supa.from("location_members").delete()
+      .eq("organization_id", organizationId)
+      .eq("user_id", userId);
+
+    const toInsert = locationIds.map((locId: string) => ({
+      organization_id: organizationId,
+      location_id: locId,
+      user_id: userId,
+    }));
+
+    const { error: lmErr } = await supa.from("location_members").insert(toInsert);
+    if (lmErr) throw lmErr;
   }
 
   return { ok: true, userId };

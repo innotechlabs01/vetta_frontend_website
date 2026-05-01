@@ -1,6 +1,6 @@
 "use client"
 import Link from 'next/link'
-import { User, Lock, Settings, Key, Users, CreditCard, MapPin, Receipt, Gem, Monitor, Printer, Plug } from 'lucide-react'
+import { User, Lock, Settings, Key, Users, CreditCard, MapPin, Receipt, Gem, Monitor, Printer, Plug, Menu } from 'lucide-react'
 import { usePathname } from 'next/navigation'
 
 const configItems = [
@@ -12,18 +12,19 @@ const configItems = [
     ],
   },
   {
-    section: 'Neogicio',
+    section: 'Neogcio',
     items: [
       { label: "General", href: "/settings/general", icon: <Settings className="w-5 h-5" /> },
       /* { label: "Planes", href: "/settings/plans", icon: <Gem className="w-5 h-5" /> },
       { label: "Facturación", href: "/settings/billing", icon: <Receipt className="w-5 h-5" /> },
-       */{ label: "Usuarios", href: "/settings/users", icon: <Users className="w-5 h-5" /> },
+      */{ label: "Usuarios", href: "/settings/users", icon: <Users className="w-5 h-5" /> },
       { label: "Pagos", href: "/settings/payments", icon: <CreditCard className="w-5 h-5" /> },
       { label: "Integraciones", href: "/settings/integrations", icon: <Plug className="w-5 h-5" /> },
       { label: "Sucursales", href: "/settings/locations", icon: <MapPin className="w-5 h-5" /> },
       { label: "POS Terminales", href: "/settings/pos-terminals", icon: <Monitor className="w-5 h-5" /> },
-      { label: "Zonas de impresion", href: "/settings/print-zones", icon: <Printer className="w-5 h-5" /> },
-    
+      { label: "Zonas de impresión", href: "/settings/print-zones", icon: <Printer className="w-5 h-5" /> },
+      { label: "Menú", href: "/settings/menu", icon: <Menu className="w-5 h-5" /> },
+     
     ],
   }
 ]

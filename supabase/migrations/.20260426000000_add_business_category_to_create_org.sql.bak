@@ -1,0 +1,43 @@
+-- Migration: Add business_category parameter to create_default_org RPC
+-- This RPC is used during onboarding to create a new organization
+
+CREATE OR REPLACE FUNCTION create_default_org(
+  p_org_name TEXT,
+  p_slug TEXT,
+  p_business_category TEXT DEFAULT 'store'
+)
+RETURNS UUID
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_org_id UUID;
+BEGIN
+  -- Check if slug is already taken
+  IF EXISTS (SELECT 1 FROM organizations WHERE slug = p_slug) THEN
+    RAISE EXCEPTION 'Slug already taken';
+  END IF;
+
+  -- Create the organization
+  INSERT INTO organizations (
+    name,
+    slug,
+    business_category,
+    created_at,
+    updated_at
+  ) VALUES (
+    p_org_name,
+    p_slug,
+    p_business_category,
+    NOW(),
+    NOW()
+  )
+  RETURNING id INTO v_org_id;
+
+  RETURN v_org_id;
+END;
+$$;
+
+-- Grant execute permission to authenticated users
+GRANT EXECUTE ON FUNCTION create_default_org TO authenticated;
+GRANT EXECUTE ON FUNCTION create_default_org TOanon;

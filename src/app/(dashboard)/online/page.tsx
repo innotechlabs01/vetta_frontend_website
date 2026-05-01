@@ -1,8 +1,6 @@
 import { createClient } from "@/utils/supabase/server";
 import { cookies } from "next/headers";
 import OnlineModule from "./OnlineModule";
-import { useSlugValidation } from "@/hooks/uselocations";
-
 
 export default async function OnlinePage() {
   const supabase = await createClient();
@@ -15,7 +13,7 @@ export default async function OnlinePage() {
     </div>;
   }
 
-  const { data: org, error } = await supabase
+  const { data: org } = await supabase
     .from("organizations")
     .select(`
       id,
@@ -26,17 +24,32 @@ export default async function OnlinePage() {
       brand_description,
       brand_colors,
       social_links,
-       title_init,
-       title_last
+      title_init,
+      title_last
     `)
     .eq("id", orgId)
     .single();
 
-  if (error || !org) {
+  if (!org) {
     return <div className="min-h-screen flex items-center justify-center">
-      <p className="text-red-500">Error: {error?.message || "Organización no encontrada"}</p>
+      <p className="text-red-500">Organización no encontrada</p>
     </div>;
   }
+
+  const { data: locations } = await supabase
+    .from("locations")
+    .select(`
+      id,
+      name,
+      is_active,
+      is_online_store,
+      is_pos_enabled,
+      pickup_enabled,
+      local_delivery_enabled,
+      shipping_enabled
+    `)
+    .eq("organization_id", orgId)
+    .order("created_at", { ascending: true });
 
   const initialBrandData = {
     brand_banner_url: org.brand_banner_url,
@@ -56,6 +69,7 @@ export default async function OnlinePage() {
         slug: org.slug
       }}
       initialBrandData={initialBrandData}
+      locations={locations || []}
     />
   );
 }

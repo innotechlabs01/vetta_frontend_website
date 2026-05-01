@@ -60,40 +60,40 @@ export default async function Signup(props: {
               error={searchParams.error}
               success={searchParams.success}
             />
-            
-            <Image src={logo} alt="Logo recompry" className="h-[30px] w-auto mb-5" />
+
+            {/* <Image src={logo} alt="Logo recompry" className="h-[30px] w-auto mb-5" /> */}
 
             <div className="flex gap-1 flex-col mb-3 w-full" >
-                
+
               <h1 className="text-2xl font-semibold">¡Bienvenid@!</h1>
-              
+
               <p className="text-sm text text-foreground text-gray-600">
                 {"Conecta con clientes e impulsa ventas recurrentes."}
               </p>
-              
+
             </div>
 
             <div className="flex flex-col gap-2 w-full items-center mt-8">
               <div className="w-full" >
                 <Label htmlFor="phone">Número de teléfono</Label>
               </div>
-              
+
               <PhoneLoginFields />
-              
-              <SubmitButton 
-                formAction={signInAction} 
-                pendingText="Enviando código..." 
+
+              <SubmitButton
+                formAction={signInAction}
+                pendingText="Enviando código..."
                 className="mt-5 text-white bg-gray-800 w-full"
               >
                 Continuar
               </SubmitButton>
-              
+
               {normalizedMessage ? <FormMessage message={normalizedMessage} /> : null}
-              
+
               <p className="text-xs text-center text-gray-500 mt-2">
                 Al continuar, recibirás un SMS con un código de acceso. Si ya tienes cuenta, iniciarás sesión; si no, se creará tu perfil automáticamente.
               </p>
-              
+
             </div>
           </form>
         </div>

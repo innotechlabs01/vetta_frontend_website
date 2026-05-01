@@ -92,8 +92,27 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
     
-
-    return NextResponse.json({ rows: rows ?? [], count: count ?? 0 });
+    // Fetch menu access for each user based on their role
+    const rowsWithMenuAccess = await Promise.all(
+      (rows ?? []).map(async (row: any) => {
+        const userRole = row.role;
+        // Query menu_config to see which menus this user can access based on role
+        const { data: menuItems } = await supaSSR
+          .from('menu_config')
+          .select('label, path')
+          .eq('organization_id', organizationId)
+          .eq('is_active', true)
+          .contains('visible_to_roles', [userRole])
+          .order('sort_order', { ascending: true });
+        
+        return {
+          ...row,
+          menu_access: menuItems?.map((m: any) => ({ label: m.label, path: m.path })) ?? []
+        };
+      })
+    );
+    
+    return NextResponse.json({ rows: rowsWithMenuAccess ?? [], count: count ?? 0 });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message ?? "Error desconocido" }, { status: 500 });
   }
