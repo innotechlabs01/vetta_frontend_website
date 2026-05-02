@@ -39,6 +39,7 @@ type MemberRow = {
 export default function UsersPage() {
   const { org } = useEnvironment();
   const orgId = org?.id;
+  const isAdmin = useEnvironment().isAdmin;
 
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<MemberRow[]>([]);
