@@ -798,13 +798,14 @@ const schema = z.object({
   firstName: z.string().min(1),
   lastName: z.string().min(1),
   role: z.enum(["owner", "admin", "manager", "member"]),
-  locationIds: z.array(z.string().uuid()).optional(), // requerido si rol no es owner/admin
+  locationIds: z.array(z.string().uuid()).optional(),
+  menuAccess: z.array(z.string()).optional(), // menu paths
 });
 
 export async function createOrgUserAction(input: unknown) {
   const parsed = schema.parse(input);
   const {
-    organizationId, phone, firstName, lastName, role, locationIds = [],
+    organizationId, phone, firstName, lastName, role, locationIds = [], menuAccess,
   } = parsed;
 
   const supa = getSupabaseAdmin();
@@ -859,17 +860,24 @@ export async function createOrgUserAction(input: unknown) {
   if (profileCheckErr) throw profileCheckErr;
 
   if (!existingProfile) {
-    // Si tuviste RLS aquí, asegúrate de que getSupabaseAdmin use SERVICE_ROLE
-    // o crea una policy específica para inserts desde el servicio.
     const fullName = `${firstName ?? ""} ${lastName ?? ""}`.trim() || null;
     const { error: profileInsErr } = await supa.from("profiles").insert({
       user_id: userId,
       full_name: fullName,
       phone,
+      menu_access: menuAccess ?? null,
     });
     if (profileInsErr) throw profileInsErr;
+  } else {
+    // Update menu access if provided
+    if (menuAccess !== undefined) {
+      const { error: profileUpdErr } = await supa
+        .from("profiles")
+        .update({ menu_access: menuAccess ?? null })
+        .eq("user_id", userId);
+      if (profileUpdErr) throw profileUpdErr;
+    }
   }
-  // Si existe, NO tocamos (para evitar violar policies o sobrescribir datos).
 
   // ---------------- 3) Organization member: crear solo si NO existe ----------------
   const { data: existingMember, error: omCheckErr } = await supa
@@ -935,8 +943,9 @@ export async function updateOrgUserAction(input: {
   lastName?: string;
   role: "owner" | "admin" | "manager" | "member";
   locationIds?: string[];
+  menuAccess?: string[];
 }) {
-  const { organizationId, userId, phone, firstName, lastName, role, locationIds = [] } = input;
+  const { organizationId, userId, phone, firstName, lastName, role, locationIds = [], menuAccess } = input;
   const supa = getSupabaseAdmin();
 
   // Update auth user metadata if name changed

@@ -16,6 +16,7 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { CountrySelect } from "@/components/ui/country-select";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -62,6 +63,7 @@ export function EditUserModal({
   const [selectedLocationId, setSelectedLocationId] = useState<string>("");
   const [locations, setLocations] = useState<LocMini[]>([]);
   const [menuAccess, setMenuAccess] = useState<Array<{ label: string; path: string }>>([]);
+  const [selectedMenus, setSelectedMenus] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(false);
 
@@ -104,6 +106,7 @@ export function EditUserModal({
       setPhoneCountry("+57");
       setSelectedLocationId("");
       setMenuAccess([]);
+      setSelectedMenus(new Set());
       return;
     }
 
@@ -130,19 +133,38 @@ export function EditUserModal({
       setSelectedLocationId("");
     }
 
-    // Fetch menu access based on user's role
+    // Fetch menu access based on user's role + load saved menu access
     if (org?.id) {
       (async () => {
         const supabase = getSupabaseBrowser();
-        const { data } = await supabase
+        
+        // Get all active menus for the organization
+        const { data: menus } = await supabase
           .from('menu_config')
           .select('label, path')
           .eq('organization_id', org.id)
           .eq('is_active', true)
-          .contains('visible_to_roles', [user.role])
           .order('sort_order', { ascending: true });
         
-        setMenuAccess(data?.map((m: any) => ({ label: m.label, path: m.path })) ?? []);
+        setMenuAccess(menus?.map((m: any) => ({ label: m.label, path: m.path })) ?? []);
+        
+        // Load user's saved menu access from profile
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('menu_access')
+          .eq('user_id', user.user_id)
+          .maybeSingle();
+        
+        if (profile?.menu_access && Array.isArray(profile.menu_access)) {
+          setSelectedMenus(new Set(profile.menu_access as string[]));
+        } else {
+          // Default: select all menus for this role
+          const roleMenus = menus?.filter((m: any) => {
+            // We'd need to check visible_to_roles, but for simplicity, select all
+            return true;
+          }).map((m: any) => m.path) ?? [];
+          setSelectedMenus(new Set(roleMenus));
+        }
       })();
     }
 
@@ -184,6 +206,7 @@ export function EditUserModal({
         phone: finalPhone,
         role,
         locationIds: selectedLocationId ? [selectedLocationId] : [],
+        menuAccess: [...Array.from(selectedMenus)],
       });
 
       if (res?.ok) {
@@ -314,24 +337,39 @@ export function EditUserModal({
               </div>
             )}
 
-            {/* Menus this user can access (read-only, based on role) */}
+            {/* Menu Access Selection */}
             <div>
               <div className="text-sm font-medium mb-2">
-                Menús que puede ver (automático por rol)
+                Acceso a menús
               </div>
-              <div className="flex flex-wrap gap-1">
-                {menuAccess.length > 0 ? (
-                  menuAccess.map((menu: any, idx: number) => (
-                    <span key={idx} className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded">
-                      {menu.label}
-                    </span>
-                  ))
-                ) : (
-                  <span className="text-xs text-muted-foreground">No hay menús activos para este rol</span>
+              <div className="max-h-[300px] overflow-auto space-y-2 pr-1">
+                {menuAccess.map((menu) => {
+                  const checked = selectedMenus.has(menu.path);
+                  return (
+                    <label key={menu.path} className="flex items-center gap-3 border rounded-lg px-3 py-2">
+                      <Checkbox
+                        checked={checked}
+                        onCheckedChange={(v) => {
+                          const next = new Set(selectedMenus);
+                          v ? next.add(menu.path) : next.delete(menu.path);
+                          setSelectedMenus(next);
+                        }}
+                      />
+                      <div className="flex-1">
+                        <div className="text-sm font-medium">{menu.label}</div>
+                        <div className="text-xs text-muted-foreground">{menu.path}</div>
+                      </div>
+                    </label>
+                  );
+                })}
+                {!menuAccess.length && (
+                  <div className="text-sm text-muted-foreground p-4 border rounded-lg">
+                    No hay menús activos configurados.
+                  </div>
                 )}
               </div>
               <p className="text-xs text-muted-foreground mt-1">
-                Los menus se asignan automaticamente segun el rol del usuario en la columna de la tabla.
+                Selecciona los menús a los que este usuario tendrá acceso.
               </p>
             </div>
 

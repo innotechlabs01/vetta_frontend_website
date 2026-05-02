@@ -35,6 +35,10 @@ export function CreateUserModal({ open, onClose }: { open: boolean; onClose: () 
   const [locations, setLocations] = useState<LocMini[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
+  
+  // Menu access state
+  const [menus, setMenus] = useState<Array<{ label: string; path: string }>>([]);
+  const [selectedMenus, setSelectedMenus] = useState<Set<string>>(new Set());
 
   const needsLocations = useMemo(() => !["owner","admin"].includes(role), [role]);
 
@@ -50,6 +54,20 @@ export function CreateUserModal({ open, onClose }: { open: boolean; onClose: () 
       setLocations((data as LocMini[]) ?? []);
     })();
   }, [open, organizationId, supabase]);
+
+  // Fetch menus
+  useEffect(() => {
+    if (!open || !org?.id) return;
+    (async () => {
+      const { data } = await supabase
+        .from('menu_config')
+        .select('label, path')
+        .eq('organization_id', org.id)
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true });
+      setMenus(data?.map((m: any) => ({ label: m.label, path: m.path })) ?? []);
+    })();
+  }, [open, org?.id, supabase]);
 
   async function onSubmit() {
     try {
@@ -73,6 +91,7 @@ export function CreateUserModal({ open, onClose }: { open: boolean; onClose: () 
         phone: phoneToSend!, 
         firstName, lastName, role,
         locationIds: [...Array.from(selected)],
+        menuAccess: [...Array.from(selectedMenus)],
       });
 
       if (res?.ok) {
@@ -195,6 +214,36 @@ export function CreateUserModal({ open, onClose }: { open: boolean; onClose: () 
               Rol <b>{role}</b> tiene acceso a todas las sucursales (no requiere selección).
             </div>
           )}
+
+          {/* Menu Access */}
+          <div className="mt-2">
+            <div className="text-sm font-medium mb-2">Acceso a menús</div>
+            <div className="max-h-[300px] overflow-auto space-y-2 pr-1">
+              {menus.map((menu) => {
+                const checked = selectedMenus.has(menu.path);
+                return (
+                  <label key={menu.path} className="flex items-center gap-3 border rounded-lg px-3 py-2">
+                    <Checkbox
+                      checked={checked}
+                      onCheckedChange={(v) => {
+                        const next = new Set(selectedMenus);
+                        v ? next.add(menu.path) : next.delete(menu.path);
+                        setSelectedMenus(next);
+                      }}
+                    />
+                    <div className="flex-1">
+                      <div className="text-sm font-medium">{menu.label}</div>
+                      <div className="text-xs text-muted-foreground">{menu.path}</div>
+                    </div>
+                  </label>
+                );
+              })}
+              {!menus.length && <div className="text-sm text-muted-foreground">No hay menús configurados.</div>}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Selecciona los menús a los que este usuario tendrá acceso.
+            </p>
+          </div>
 
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" onClick={onClose}>Cancelar</Button>
