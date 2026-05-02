@@ -39,7 +39,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
-    // Chequear membership (ajusta roles permitidos si quieres)
+    // Chequear membership (ajista roles permitidos si quieres)
     const { data: membership, error: memErr } = await supaSSR
       .from("organization_members")
       .select("role")
@@ -92,11 +92,34 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
     
-    // Fetch menu access for each user based on their role
+    // Fetch menu access for each user
     const rowsWithMenuAccess = await Promise.all(
       (rows ?? []).map(async (row: any) => {
+        // First, check if user has custom menu_access saved in profile
+        const { data: profile } = await supaSSR
+          .from('profiles')
+          .select('menu_access')
+          .eq('user_id', row.user_id)
+          .maybeSingle();
+        
+        // If user has custom menu_access, use it
+        if (profile?.menu_access && Array.isArray(profile.menu_access) && profile.menu_access.length > 0) {
+          // Fetch menu details for the saved paths
+          const { data: menuItems } = await supaSSR
+            .from('menu_config')
+            .select('label, path')
+            .eq('organization_id', organizationId)
+            .eq('is_active', true)
+            .in('path', profile.menu_access);
+          
+          return {
+            ...row,
+            menu_access: menuItems?.map((m: any) => ({ label: m.label, path: m.path })) ?? []
+          };
+        }
+        
+        // Fall back to role-based menus
         const userRole = row.role;
-        // Query menu_config to see which menus this user can access based on role
         const { data: menuItems } = await supaSSR
           .from('menu_config')
           .select('label, path')

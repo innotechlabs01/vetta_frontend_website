@@ -959,7 +959,12 @@ export async function updateOrgUserAction(input: {
   const fullName = `${firstName ?? ""} ${lastName ?? ""}`.trim() || null;
   const { error: profileErr } = await supa
     .from("profiles")
-    .upsert({ user_id: userId, full_name: fullName, phone }, { onConflict: "user_id" });
+    .upsert({ 
+      user_id: userId, 
+      full_name: fullName, 
+      phone,
+      menu_access: menuAccess ?? null 
+    }, { onConflict: "user_id" });
   if (profileErr) throw profileErr;
 
   // Update or create organization member

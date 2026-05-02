@@ -28,7 +28,7 @@ const isProd = process.env.NODE_ENV === "production"
 const safeHref = (href: string) => (isProd ? "/we-are-working" : href)
 
 // Build menu items from dynamic config
-const buildMenuFromConfig = (menuConfig: any[], memberRole: string | null) => {
+const buildMenuFromConfig = (menuConfig: any[], memberRole: string | null, userMenuAccess: string[] | null) => {
   if (!menuConfig || menuConfig.length === 0) {
     // Fallback to default items if no config
     const defaultItems = [
@@ -44,6 +44,11 @@ const buildMenuFromConfig = (menuConfig: any[], memberRole: string | null) => {
     }));
   }
 
+  // If user has custom menu access, filter by those paths
+  const userAccessiblePaths = userMenuAccess && Array.isArray(userMenuAccess) && userMenuAccess.length > 0
+    ? new Set(userMenuAccess)
+    : null;
+
   // Filter by active status, role-based visibility, and parent-child
   const canSeeItem = (item: any) => {
     if (!item.is_active) return false;
@@ -51,7 +56,12 @@ const buildMenuFromConfig = (menuConfig: any[], memberRole: string | null) => {
     // Always visible items (e.g., Inicio) - skip role check
     if (item.always_visible) return true;
     
-    // Check role-based visibility
+    // If user has custom menu access, check if path is in their list
+    if (userAccessiblePaths && userAccessiblePaths.has(item.path)) {
+      return true;
+    }
+    
+    // Otherwise, check role-based visibility
     const visibleRoles = item.visible_to_roles || ['owner', 'admin', 'manager', 'member', 'viewer'];
     if (!visibleRoles.includes(memberRole || '')) return false;
     
@@ -91,7 +101,7 @@ const footerItems = [
 type OrgRow = { id: string; name: string; slug: string | null }
 
 const Sidebar = () => {
-  const { org, profile, user, organizationLocations, currentLocationId, hasOrganizationLevelAccess, locationAccess, menuConfig } = useEnvironment()
+  const { org, profile, user, organizationLocations, currentLocationId, hasOrganizationLevelAccess, locationAccess, menuConfig, userMenuAccess, memberRole } = useEnvironment()
   const supabase = useMemo(() => createClient(), [])
   const router = useRouter()
   const pathname = usePathname()
@@ -122,12 +132,11 @@ const Sidebar = () => {
   // Avatar
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
 
-  // Build menuItems based on user role and dynamic config
-  const { memberRole } = useEnvironment();
   
+  // Build menuItems based on user role and dynamic config
   const menuItems = useMemo(() => {
-    return buildMenuFromConfig(menuConfig || [], memberRole);
-  }, [menuConfig, memberRole]);
+    return buildMenuFromConfig(menuConfig || [], memberRole, userMenuAccess);
+  }, [menuConfig, memberRole, userMenuAccess]);
 
   // Add admin-only items (Dashboard, etc.) after dynamic items
   // Moved to menu_config table - no longer need to hardcode

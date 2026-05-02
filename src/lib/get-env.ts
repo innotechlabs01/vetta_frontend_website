@@ -53,6 +53,8 @@ export type Environment = {
     is_active: boolean;
     sort_order: number;
   }>;
+  // User's custom menu access (overrides role-based)
+  userMenuAccess: string[] | null;
 };
 
 // cache() evita llamadas duplicadas a supabase.auth.getUser en la misma request
@@ -120,9 +122,10 @@ export const getEnvironment = cache(async (): Promise<Environment> => {
       hasOrganizationLevelAccess: false,
       hasLocationLevelAccess: false,
       menuConfig: [],
+      userMenuAccess: null,
     };
   }
-
+  
   if (!user) {
     return { 
       org: null, 
@@ -135,9 +138,10 @@ export const getEnvironment = cache(async (): Promise<Environment> => {
       hasOrganizationLevelAccess: false,
       hasLocationLevelAccess: false,
       menuConfig: [],
+      userMenuAccess: null,
     };
   }
-
+  
   // Mi rol en la org actual (1 fila)
   const membershipClient = me?.user ? supabase : getSupabaseAdmin();
   const { data: membership } = await membershipClient
@@ -160,6 +164,7 @@ export const getEnvironment = cache(async (): Promise<Environment> => {
       hasOrganizationLevelAccess: false,
       hasLocationLevelAccess: false,
       menuConfig: [],
+      userMenuAccess: null,
     };
   }
 
@@ -222,6 +227,10 @@ export const getEnvironment = cache(async (): Promise<Environment> => {
     hasLocationLevelAccess,
     // Fetch menu configuration
     menuConfig: await getMenuConfig(supabase, orgId),
+    // Fetch user's custom menu access from profile
+    userMenuAccess: profile?.user_id ? (
+      (await supabase.from('profiles').select('menu_access').eq('user_id', profile.user_id).single()).data?.menu_access ?? null
+    ) : null,
   };
 });
 
