@@ -32,7 +32,7 @@ const DELIVERY_STATUSES = [
 ];
 
 export default function DeliveriesPage() {
-  const { org, locationAccess, currentLocationId } = useEnvironment();
+  const { org, locationAccess, currentLocationId, hasOrganizationLevelAccess, isAdmin } = useEnvironment();
   const supabase = useMemo(() => createClient(), []);
   const [orders, setOrders] = useState<DeliveryOrder[]>([]);
   const [loading, setLoading] = useState(true);
@@ -40,11 +40,14 @@ export default function DeliveriesPage() {
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchDeliveries = useCallback(async () => {
-    if (!org?.id || !currentLocationId) return;
+    if (!org?.id) {
+      setLoading(false);
+      return;
+    }
 
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from("sales")
         .select(`
           id,
@@ -58,10 +61,16 @@ export default function DeliveriesPage() {
           delivery_metadata
         `)
         .eq("organization_id", org.id)
-        .eq("location_id", currentLocationId)
         .eq("order_type", "DELIVERY_LOCAL")
         .order("created_at", { ascending: false });
 
+      // If user has a specific location selected (and is not admin/owner), filter by it
+      if (currentLocationId && !hasOrganizationLevelAccess) {
+        query = query.eq("location_id", currentLocationId);
+      }
+      // Otherwise, admins/owners see ALL deliveries (no location filter)
+
+      const { data, error } = await query;
       if (error) throw error;
 
       const formattedOrders: DeliveryOrder[] = (data || []).map((order: any) => ({
@@ -85,7 +94,7 @@ export default function DeliveriesPage() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [supabase, org?.id, currentLocationId]);
+  }, [supabase, org?.id, currentLocationId, hasOrganizationLevelAccess]);
 
   useEffect(() => {
     fetchDeliveries();
