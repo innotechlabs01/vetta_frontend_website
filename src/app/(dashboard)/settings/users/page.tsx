@@ -37,7 +37,7 @@ type MemberRow = {
 };
 
 export default function UsersPage() {
-  const { org } = useEnvironment();
+  const { org, memberRole: currentUserRole } = useEnvironment();
   const orgId = org?.id;
   const isAdmin = useEnvironment().isAdmin;
 
@@ -45,14 +45,29 @@ export default function UsersPage() {
   const [rows, setRows] = useState<MemberRow[]>([]);
   const [q, setQ] = useState("");
   const [openModal, setOpenModal] = useState(false);
-
+  
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmUser, setConfirmUser] = useState<MemberRow | null>(null);
   const [editingUser, setEditingUser] = useState<MemberRow | null>(null);
 
-  // Opcional: paginación
-  const [page] = useState(1);
+  // Optional: pagination
+  const [page, setPage] = useState(1);
   const [pageSize] = useState(50);
+
+  // Helper to check if current user can edit/delete a specific user
+  const canEditUser = (targetUser: MemberRow) => {
+    if (!currentUserRole) return false;
+    if (currentUserRole === "owner") return true; // Owners can edit anyone
+    if (currentUserRole === "admin" && targetUser.role !== "owner") return true; // Admins can edit non-owners
+    return false;
+  };
+
+  const canDeleteUser = (targetUser: MemberRow) => {
+    if (!currentUserRole) return false;
+    if (currentUserRole === "owner") return true; // Owners can delete anyone
+    if (currentUserRole === "admin" && targetUser.role !== "owner") return true; // Admins can delete non-owners
+    return false;
+  };
 
   async function fetchData(signal?: AbortSignal) {
     if (!orgId) return;
@@ -240,14 +255,12 @@ export default function UsersPage() {
                   </TableCell>
               <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
-                      {/* Get current user's role */}
-                      {(() => {
-                        const { memberRole: currentUserRole } = useEnvironment();
-                        const canEdit = currentUserRole === "owner" || (currentUserRole === "admin" && u.role !== "owner");
-                        const canDelete = currentUserRole === "owner" || (currentUserRole === "admin" && u.role !== "owner");
+                      {rows.map((u) => {
+                        const canEdit = canEditUser(u);
+                        const canDelete = canDeleteUser(u);
                         
                         return (
-                          <>
+                          <div key={u.user_id} className="flex items-center gap-1">
                             <Button
                               variant="ghost"
                               size="icon"
@@ -262,11 +275,11 @@ export default function UsersPage() {
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  disabled={!canDelete || isDeleting}
+                                  disabled={!canDelete || deletingId === u.user_id}
                                   onClick={() => setConfirmUser(u)}
                                   title={!canDelete ? "No tienes permisos para eliminar a este usuario" : "Eliminar usuario"}
                                 >
-                                  {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                                  {deletingId === u.user_id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                                 </Button>
                               </AlertDialogTrigger>
                               <AlertDialogContent>
@@ -288,9 +301,9 @@ export default function UsersPage() {
                                 </AlertDialogFooter>
                               </AlertDialogContent>
                             </AlertDialog>
-                          </>
+                          </div>
                         );
-                      })()}
+                      })}
                     </div>
                   </TableCell>
                 </TableRow>
