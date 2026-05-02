@@ -197,10 +197,12 @@ export default function UsersPage() {
 
             {rows.map((u) => {
               const isOwner = u.role === "owner";
-              const isDeleting = deletingId === u.user_id;
-
+              const canEdit = canEditUser(u);
+              const canDelete = canDeleteUser(u);
+              
               return (
                 <TableRow key={u.user_id} className="hover:bg-muted/40">
+                  {/* Nombre */}
                   <TableCell>
                     <div className="flex items-center gap-2">
                       {u.avatar_url ? (
@@ -219,11 +221,19 @@ export default function UsersPage() {
                       <span>{u.full_name ?? "—"}</span>
                     </div>
                   </TableCell>
+
+                  {/* Email */}
                   <TableCell>{u.email ?? "—"}</TableCell>
+
+                  {/* Teléfono */}
                   <TableCell>{u.phone ?? "—"}</TableCell>
+
+                  {/* Rol */}
                   <TableCell>
                     <Badge variant="secondary">{u.role}</Badge>
                   </TableCell>
+
+                  {/* Sucursales */}
                   <TableCell>
                     {["owner", "admin"].includes(u.role) ? (
                       <span className="text-xs text-muted-foreground">Todas</span>
@@ -233,6 +243,8 @@ export default function UsersPage() {
                       </span>
                     )}
                   </TableCell>
+
+                  {/* Menús */}
                   <TableCell>
                     <div className="flex flex-wrap gap-1">
                       {u.menu_access && u.menu_access.length > 0 ? (
@@ -253,57 +265,50 @@ export default function UsersPage() {
                       )}
                     </div>
                   </TableCell>
-              <TableCell className="text-right">
+
+                  {/* Acciones */}
+                  <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
-                      {rows.map((u) => {
-                        const canEdit = canEditUser(u);
-                        const canDelete = canDeleteUser(u);
-                        
-                        return (
-                          <div key={u.user_id} className="flex items-center gap-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => setEditingUser(u)}
-                              disabled={!canEdit}
-                              title={!canEdit ? "No tienes permisos para editar a este usuario" : "Editar usuario"}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setEditingUser(u)}
+                        disabled={!canEdit}
+                        title={!canEdit ? "No tienes permisos para editar a este usuario" : "Editar usuario"}
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </Button>
+                      <AlertDialog open={!!confirmUser && confirmUser.user_id === u.user_id} onOpenChange={(open) => !open && setConfirmUser(null)}>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            disabled={!canDelete || deletingId === u.user_id}
+                            onClick={() => setConfirmUser(u)}
+                            title={!canDelete ? "No tienes permisos para eliminar a este usuario" : "Eliminar usuario"}
+                          >
+                            {deletingId === u.user_id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Eliminar usuario</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              ¿Seguro que deseas eliminar a <b>{u.full_name ?? u.email ?? "este usuario"}</b> de la organización?
+                              Esta acción no se puede deshacer.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                            <AlertDialogAction
+                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                              onClick={() => handleDelete(u.user_id)}
                             >
-                              <Pencil className="w-4 h-4" />
-                            </Button>
-                            <AlertDialog open={!!confirmUser && confirmUser.user_id === u.user_id} onOpenChange={(open) => !open && setConfirmUser(null)}>
-                              <AlertDialogTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  disabled={!canDelete || deletingId === u.user_id}
-                                  onClick={() => setConfirmUser(u)}
-                                  title={!canDelete ? "No tienes permisos para eliminar a este usuario" : "Eliminar usuario"}
-                                >
-                                  {deletingId === u.user_id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Eliminar usuario</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    ¿Seguro que deseas eliminar a <b>{u.full_name ?? u.email ?? "este usuario"}</b> de la organización?
-                                    Esta acción no se puede deshacer.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                  <AlertDialogAction
-                                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                    onClick={() => handleDelete(u.user_id)}
-                                  >
-                                    Eliminar
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          </div>
-                        );
-                      })}
+                              Eliminar
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
                     </div>
                   </TableCell>
                 </TableRow>
