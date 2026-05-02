@@ -238,48 +238,59 @@ export default function UsersPage() {
                       )}
                     </div>
                   </TableCell>
-                  <TableCell className="text-right">
+              <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => setEditingUser(u)}
-                        disabled={isOwner}
-                        title={isOwner ? "No puedes editar al owner" : "Editar usuario"}
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </Button>
-                      <AlertDialog open={!!confirmUser && confirmUser.user_id === u.user_id} onOpenChange={(open) => !open && setConfirmUser(null)}>
-                        <AlertDialogTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            disabled={isOwner || isDeleting}
-                            onClick={() => setConfirmUser(u)}
-                            title={isOwner ? "No puedes eliminar al owner" : "Eliminar usuario"}
-                          >
-                            {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Eliminar usuario</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              ¿Seguro que deseas eliminar a <b>{u.full_name ?? u.email ?? "este usuario"}</b> de la organización?
-                              Esta acción no se puede deshacer.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                            <AlertDialogAction
-                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                              onClick={() => handleDelete(u.user_id)}
+                      {/* Get current user's role */}
+                      {(() => {
+                        const { memberRole: currentUserRole } = useEnvironment();
+                        const canEdit = currentUserRole === "owner" || (currentUserRole === "admin" && u.role !== "owner");
+                        const canDelete = currentUserRole === "owner" || (currentUserRole === "admin" && u.role !== "owner");
+                        
+                        return (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setEditingUser(u)}
+                              disabled={!canEdit}
+                              title={!canEdit ? "No tienes permisos para editar a este usuario" : "Editar usuario"}
                             >
-                              Eliminar
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
+                              <Pencil className="w-4 h-4" />
+                            </Button>
+                            <AlertDialog open={!!confirmUser && confirmUser.user_id === u.user_id} onOpenChange={(open) => !open && setConfirmUser(null)}>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  disabled={!canDelete || isDeleting}
+                                  onClick={() => setConfirmUser(u)}
+                                  title={!canDelete ? "No tienes permisos para eliminar a este usuario" : "Eliminar usuario"}
+                                >
+                                  {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Eliminar usuario</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    ¿Seguro que deseas eliminar a <b>{u.full_name ?? u.email ?? "este usuario"}</b> de la organización?
+                                    Esta acción no se puede deshacer.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                    onClick={() => handleDelete(u.user_id)}
+                                  >
+                                    Eliminar
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </>
+                        );
+                      })()}
                     </div>
                   </TableCell>
                 </TableRow>

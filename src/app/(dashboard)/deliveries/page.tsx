@@ -41,6 +41,7 @@ export default function DeliveriesPage() {
 
   const fetchDeliveries = useCallback(async () => {
     if (!org?.id) {
+      console.log("No org.id, stopping");
       setLoading(false);
       return;
     }
@@ -71,7 +72,13 @@ export default function DeliveriesPage() {
       // Otherwise, admins/owners see ALL deliveries (no location filter)
 
       const { data, error } = await query;
-      if (error) throw error;
+      
+      if (error) {
+        console.error("Supabase error:", error);
+        throw error;
+      }
+
+      console.log("Deliveries fetched:", data?.length || 0);
 
       const formattedOrders: DeliveryOrder[] = (data || []).map((order: any) => ({
         id: order.id,
@@ -89,7 +96,7 @@ export default function DeliveriesPage() {
       setOrders(formattedOrders);
     } catch (err: any) {
       console.error("Error fetching deliveries:", err);
-      toast.error("Error al cargar domicilios");
+      toast.error("Error al cargar domicilios: " + (err.message || err));
     } finally {
       setLoading(false);
       setRefreshing(false);

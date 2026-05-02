@@ -224,7 +224,11 @@ export function EditUserModal({
   }
 
   const isOwner = user?.role === "owner";
-
+  
+  // Get current user's role to check permissions
+  const { memberRole: currentUserRole } = useEnvironment();
+  const canChangeRole = currentUserRole === "owner" || (currentUserRole === "admin" && !isOwner);
+  
   return (
     <Dialog
       open={open}
@@ -279,28 +283,33 @@ export function EditUserModal({
               )}
             </div>
 
-            <div>
-              <label className="text-sm font-medium">Rol</label>
-              <div className="mt-1">
-                <Select
-                  value={role}
-                  onValueChange={(v: "owner" | "admin" | "manager" | "member") =>
-                    setRole(v)
-                  }
-                  disabled={isOwner}
-                >
-                  <SelectTrigger className="w-[220px]">
-                    <SelectValue placeholder="Selecciona rol" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="owner">Owner</SelectItem>
-                    <SelectItem value="admin">Admin</SelectItem>
-                    <SelectItem value="manager">Manager</SelectItem>
-                    <SelectItem value="member">Vendedor</SelectItem>
-                  </SelectContent>
-                </Select>
+              <div>
+                <label className="text-sm font-medium">Rol</label>
+                <div className="mt-1">
+                  <Select
+                    value={role}
+                    onValueChange={(v: "owner" | "admin" | "manager" | "member") =>
+                      setRole(v)
+                    }
+                    disabled={!canChangeRole}
+                  >
+                    <SelectTrigger className="w-[220px]">
+                      <SelectValue placeholder="Selecciona rol" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="owner">Owner</SelectItem>
+                      <SelectItem value="admin">Admin</SelectItem>
+                      <SelectItem value="manager">Manager</SelectItem>
+                      <SelectItem value="member">Vendedor</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {!canChangeRole && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {isOwner ? "El rol Owner no se puede cambiar" : "No tienes permisos para cambiar el rol"}
+                    </p>
+                  )}
+                </div>
               </div>
-            </div>
 
             {needsLocation && (
               <div>
