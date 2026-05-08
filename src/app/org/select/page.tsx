@@ -53,13 +53,13 @@ export default async function OrgSelectPage({
         {/* Header: logo + CTA primaria */}
         <div className="flex items-center justify-between">
           <Link href="/" className="flex items-center">
-            <Image
+            {/*<Image
               src="/logo.svg"
-              alt="Recompry Logo"
+              alt="Vetta Logo"
               width={160}
               height={40}
               priority
-            />
+            />*/}
           </Link>
           <Button asChild className="bg-blue-600">
             <Link href="/onboarding">Crear Neogicio</Link>

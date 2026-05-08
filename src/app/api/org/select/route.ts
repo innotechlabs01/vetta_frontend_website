@@ -16,19 +16,23 @@ async function hasMembership(orgId: string): Promise<boolean> {
     data: { user },
     error: userError,
   } = await supabase.auth.getUser();
-  const effectiveUserId = user?.id;
-
-  if (userError || !effectiveUserId) {
+  
+  if (userError || !user?.id) {
     return false;
   }
 
-  const membershipClient = user ? supabase : getSupabaseAdmin();
-  const { data: membership } = await membershipClient
+  // Check if user has membership in this org (use admin to bypass RLS)
+  const { data: membership, error: memberError } = await getSupabaseAdmin()
     .from("organization_members")
-    .select("organization_id")
+    .select("id")
     .eq("organization_id", orgId)
-    .eq("user_id", effectiveUserId)
+    .eq("user_id", user.id)
     .limit(1);
+
+  if (memberError) {
+    console.error("[api/org/select] Membership check error:", memberError);
+    return false;
+  }
 
   return Boolean(membership?.length);
 }

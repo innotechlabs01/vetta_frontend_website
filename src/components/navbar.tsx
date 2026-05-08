@@ -51,7 +51,7 @@ const Navbar = () => {
         // If avatar_url is available, fetch the signed URL
         if (data.avatar_url) {
           const { data: signedData } = await supabase.storage
-            .from("recompry-private")
+            .from("Vetta-private")
             .createSignedUrl(data.avatar_url, 604800);
           
           if (signedData && signedData.signedUrl) {

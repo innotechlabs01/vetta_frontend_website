@@ -7,7 +7,7 @@ import { AuthQueryToast } from "@/components/auth/AuthQueryToast";
 import Link from "next/link";
 import Image from "next/image";
 import joel from "../../../../public/joel.png"
-import logo from "../../../../public/logo.svg"
+// import logo from "../../../../public/logo.svg"
 
 export default async function Signup(props: {
   searchParams: Promise<Record<string, string | undefined>>;
@@ -61,7 +61,7 @@ export default async function Signup(props: {
               success={searchParams.success}
             />
 
-            {/* <Image src={logo} alt="Logo recompry" className="h-[30px] w-auto mb-5" /> */}
+            {/* <Image src={logo} alt="Logo Vetta" className="h-[30px] w-auto mb-5" /> */}
 
             <div className="flex gap-1 flex-col mb-3 w-full" >
 

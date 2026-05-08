@@ -1,6 +1,6 @@
-# Recompry App
+# Vetta App
 
-Repositorio principal de la app de Recompry.
+Repositorio principal de la app de Vetta.
 
 ## Intro general
 
@@ -26,7 +26,7 @@ En terminos practicos, toda operacion depende del entorno activo (`org_id`) y de
 
 Documentacion disponible en `docs/`:
 
-- [Modulos y areas de Recompry App](./docs/recompry-app-modulos.md)
+- [Modulos y areas de Vetta App](./docs/Vetta-app-modulos.md)
 - [Protocolo de despliegue](./docs/deploy-protocol.md)
 
 ## Setup local

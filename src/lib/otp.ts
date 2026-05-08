@@ -1,27 +1,15 @@
 // src/lib/otp.ts
 import { createClient } from '@/utils/supabase/server';
-import { headers } from 'next/headers';
 
 // Generate a random 6-digit OTP code
 export function generateOTP(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-// Send OTP via Twilio
+// Save OTP to database (actual sending is done via Sent.dm in actions.ts)
 export async function sendOTP(phoneNumber: string): Promise<{ success: boolean; error?: string }> {
-  const accountSid = process.env.TWILIO_ACCOUNT_SID;
-  const authToken = process.env.TWILIO_AUTH_TOKEN;
-  const fromNumber = process.env.TWILIO_PHONE_NUMBER;
-
-  if (!accountSid || !authToken || !fromNumber) {
-    console.error('[otp] Twilio not configured');
-    return { success: false, error: 'SMS service not configured' };
-  }
-
   const code = generateOTP();
   const supabase = await createClient();
-  const headersList = await headers();
-  const origin = headersList.get('origin') || 'http://localhost:3000';
 
   // Save verification code to database
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
@@ -40,41 +28,8 @@ export async function sendOTP(phoneNumber: string): Promise<{ success: boolean; 
     return { success: false, error: 'Failed to generate code' };
   }
 
-  try {
-    // Send SMS via Twilio REST API
-    const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
-    const auth = Buffer.from(`${accountSid}:${authToken}`).toString('base64');
-
-    const params = new URLSearchParams({
-      From: fromNumber,
-      To: phoneNumber,
-      Body: `Tu código de acceso para Vetta es: ${code}. Expira en 10 minutos.`
-    });
-
-    const response = await fetch(twilioUrl, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Basic ${auth}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: params.toString()
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error('[otp] Twilio error:', errorData);
-      // Still return success since code is saved
-      return { success: true };
-    }
-
-    const data = await response.json();
-    console.log('[otp] SMS sent successfully:', data.sid);
-    return { success: true };
-  } catch (error: any) {
-    console.error('[otp] Error sending SMS:', error);
-    // Still return success since code is saved - user can request new one
-    return { success: true };
-  }
+  console.log('[otp] OTP saved to database:', { phone: phoneNumber, code });
+  return { success: true };
 }
 
 // Verify OTP code

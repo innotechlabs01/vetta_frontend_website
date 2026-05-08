@@ -1,0 +1,1097 @@
+"use client";
+
+import { useState, useRef, useEffect } from "react";
+import { toast } from "sonner";
+import { Plus, Pencil, Check, X, Loader2 } from "lucide-react";
+import { getSupabaseBrowser } from "@/utils/supabase/client";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
+
+type ProductItemType = "physical" | "service" | "digital" | "variant" | "foreign_exchange_asset" | "medication";
+type TaxIvaCategory = "GRAVADO" | "EXENTO" | "EXCLUIDO";
+
+const TAB_LABELS = ["Básicos", "Imágenes", "Variantes", "Más"] as const;
+const TAB_KEYS = ["basic", "images", "variants", "more"] as const;
+type TabKey = (typeof TAB_KEYS)[number];
+
+export function ProductModal({
+  open,
+  onClose,
+  onSaved,
+  organizationId,
+  product,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onSaved: (product: any) => void;
+  onDeleted: (productId: string) => void;
+  organizationId: string | null | undefined;
+  product: any | null;
+}) {
+  const supabase = getSupabaseBrowser();
+  const isEdit = Boolean(product?.id);
+  const [activeTab, setActiveTab] = useState<TabKey>("basic");
+  
+  // Basic fields
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [itemType, setItemType] = useState<ProductItemType>("physical");
+  const [available, setAvailable] = useState(true);
+  const [ivaCategory, setIvaCategory] = useState<TaxIvaCategory>("GRAVADO");
+  const [ivaRate, setIvaRate] = useState("19");
+  const [preparationTime, setPreparationTime] = useState("");
+  
+  // Images
+  const [images, setImages] = useState<any[]>([]);
+  
+  // Variants
+  const [variants, setVariants] = useState<any[]>([]);
+  const [variantName, setVariantName] = useState("");
+  const [variantPrice, setVariantPrice] = useState("");
+  const [variantSku, setVariantSku] = useState("");
+  const [expandedVariantId, setExpandedVariantId] = useState<string | null>(null);
+  const [inventoryByVariant, setInventoryByVariant] = useState<Record<string, any[]>>({});
+  
+  // Warehouses
+  const [warehouses, setWarehouses] = useState<any[]>([]);
+  const [modifierSets, setModifierSets] = useState<any[]>([]);
+  const [selectedModifierSetIds, setSelectedModifierSetIds] = useState<string[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
+  
+  // Load warehouses
+  useEffect(() => {
+    if (!open || !organizationId) return;
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from("warehouses")
+          .select("id, name")
+          .eq("organization_id", organizationId)
+          .order("name", { ascending: true });
+        if (error) throw error;
+        setWarehouses(data || []);
+      } catch (error: any) {
+        toast.error(error.message || "Error cargando bodegas");
+      }
+    })();
+  }, [open, organizationId]);
+  
+  // Load data when editing
+  useEffect(() => {
+    if (!open || !product?.id || !organizationId) {
+      // Reset all state for new product
+      setName("");
+      setDescription("");
+      setItemType("physical");
+      setAvailable(true);
+      setIvaCategory("GRAVADO");
+      setIvaRate("19");
+      setPreparationTime("");
+      setImages([]);
+      setVariants([]);
+      setVariantName("");
+      setVariantPrice("");
+      setVariantSku("");
+      setExpandedVariantId(null);
+      setInventoryByVariant({});
+      setSelectedModifierSetIds([]);
+      setSelectedCategoryIds([]);
+      return;
+    }
+
+    (async () => {
+      try {
+        // Load product data
+        const { data: productData, error: productError } = await supabase
+          .from("products")
+          .select("*")
+          .eq("id", product.id)
+          .single();
+        
+        if (productError) throw productError;
+       
+        if (productData) {
+          setName(productData.name || "");
+          setDescription(productData.description || "");
+          setItemType(productData.item_type || "physical");
+          setAvailable(productData.is_available ?? true);
+          setIvaCategory(productData.iva_category || "GRAVADO");
+          setIvaRate(productData.iva_rate?.toString() || "19");
+          setPreparationTime(productData.preparation_time_minutes?.toString() || "");
+        }
+
+        // Load images
+        const { data: imagesData, error: imagesError } = await supabase
+          .from("product_images")
+          .select("*")
+          .eq("product_id", product.id)
+          .order("sort_order", { ascending: true });
+        
+        if (imagesError) throw imagesError;
+        const mappedImages = (imagesData || []).map((img: any) => ({
+          ...img,
+          url: img.image_url || img.url || "",
+          is_primary: img.is_primary || false,
+        }));
+        setImages(mappedImages);
+
+        // Load variants
+        const { data: variantsData, error: variantsError } = await supabase
+          .from("product_variants")
+          .select("*")
+          .eq("product_id", product.id)
+          .order("created_at", { ascending: true });
+        
+        if (variantsError) throw variantsError;
+        setVariants(variantsData || []);
+
+        // Load inventory for each variant
+        const inventoryMap: Record<string, any[]> = {};
+        if (variantsData && variantsData.length > 0) {
+          const { data: inventoryData, error: inventoryError } = await supabase
+            .from("product_variant_batches")
+            .select("*")
+            .eq("product_id", product.id);
+          
+          if (inventoryError) throw inventoryError;
+          
+          (inventoryData || []).forEach((row: any) => {
+            if (!inventoryMap[row.variant_id]) {
+              inventoryMap[row.variant_id] = [];
+            }
+            inventoryMap[row.variant_id].push(row);
+          });
+        }
+        setInventoryByVariant(inventoryMap);
+
+        // Load selected modifier sets
+        const { data: modData, error: modError } = await supabase
+          .from("product_modifier_sets")
+          .select("modifier_set_id")
+          .eq("product_id", product.id);
+        
+        if (modError) throw modError;
+        setSelectedModifierSetIds((modData || []).map((m: any) => m.modifier_set_id));
+
+        // Load selected categories (product_categories table)
+        const { data: catData, error: catError } = await supabase
+          .from("product_categories")
+          .select("category_id")
+          .eq("product_id", product.id);
+        
+        if (catError) throw catError;
+        setSelectedCategoryIds((catData || []).map((c: any) => c.category_id));
+
+        console.log("Data loaded:", {
+          images: imagesData?.length || 0,
+          variants: variantsData?.length || 0,
+          inventory: Object.keys(inventoryMap).length
+        });
+      } catch (error: any) {
+        toast.error(error.message || "Error cargando datos del producto");
+      }
+    })();
+  }, [open, product?.id, organizationId]);
+
+  const onSubmit = async () => {
+    if (!name.trim()) {
+      toast.error("El nombre es obligatorio");
+      return;
+    }
+    
+    setSaving(true);
+    try {
+      const productPayload: any = {
+        name: name.trim(),
+        description: description.trim() || null,
+        item_type: itemType,
+        is_available: available,
+        iva_category: ivaCategory,
+        iva_rate: ivaCategory === "GRAVADO" ? parseFloat(ivaRate || "0") : null,
+        preparation_time_minutes: itemType === "variant" && prerationTime ? parseInt(prerationTime) : null,
+        organization_id: organizationId,
+      };
+
+      let productId: string;
+
+      if (isEdit && product?.id) {
+        // Update existing product
+        const { error } = await supabase
+          .from("products")
+          .update(productPayload)
+          .eq("id", product.id);
+        if (error) throw error;
+        productId = product.id;
+        toast.success("Producto actualizado");
+      } else {
+        // Create new product
+        const { data, error } = await supabase
+          .from("products")
+          .insert(productPayload)
+          .select("id")
+          .single();
+        if (error) throw error;
+        productId = data.id;
+        toast.success("Producto creado");
+      }
+
+      // Save images
+      if (images.length > 0) {
+        // Delete existing images if editing
+        if (isEdit) {
+          const { error: delError } = await supabase
+            .from("product_images")
+            .delete()
+            .eq("product_id", productId);
+          if (delError) throw delError;
+        }
+
+        // Insert new images
+        const imagesToInsert = images.map((img, idx) => ({
+          product_id: productId,
+          organization_id: organizationId,
+          url: img.url,
+          storage_path: img.storage_path || null,
+          is_primary: img.is_primary || false,
+          sort_order: idx,
+        }));
+        
+        const { error: imgError } = await supabase
+          .from("product_images")
+          .insert(imagesToInsert);
+        if (imgError) throw imgError;
+      }
+
+      // Save variants
+      if (variants.length > 0) {
+        // Delete existing variants if editing
+        if (isEdit) {
+          const { error: delError } = await supabase
+            .from("product_variants")
+            .delete()
+            .eq("product_id", productId);
+          if (delError) throw delError;
+        }
+
+        // Insert new variants
+        const variantsToInsert = variants.map((v: any) => ({
+          product_id: productId,
+          organization_id: organizationId,
+          name: v.name,
+          price: v.price ? parseFloat(v.price) : null,
+          sku: v.sku || null,
+          is_active: true,
+          is_default: false,
+        }));
+        
+        const { data: variantsData, error: varError } = await supabase
+          .from("product_variants")
+          .insert(variantsToInsert)
+          .select("id, name");
+        if (varError) throw varError;
+
+        // Save inventory for each variant
+        if (variantsData && variantsData.length > 0) {
+          // Build a map of variant name to new ID
+          const variantIdMap: Record<string, string> = {};
+          variantsData.forEach((v: any) => {
+            variantIdMap[v.name] = v.id;
+          });
+
+          // Delete existing inventory if editing
+          if (isEdit) {
+            const { error: delError } = await supabase
+              .from("product_variant_batches")
+              .delete()
+              .eq("product_id", productId);
+            if (delError) throw delError;
+          }
+
+          // Insert inventory
+          const inventoryToInsert: any[] = [];
+          Object.keys(inventoryByVariant).forEach((variantName) => {
+            const variantId = variantIdMap[variantName] || 
+              variantsData.find((v: any) => v.name === variantName)?.id;
+            if (!variantId) return;
+            
+            (inventoryByVariant[variantName] || []).forEach((row: any) => {
+              inventoryToInsert.push({
+                product_id: productId,
+                organization_id: organizationId,
+                variant_id: variantId,
+                warehouse_id: row.warehouse_id,
+                batch_code: row.batch_code || null,
+                quantity_units: row.quantity ? parseFloat(row.quantity) : null,
+              });
+            });
+          });
+
+          if (inventoryToInsert.length > 0) {
+            const { error: invError } = await supabase
+              .from("product_variant_batches")
+              .insert(inventoryToInsert);
+            if (invError) throw invError;
+          }
+        }
+      }
+
+      // Save modifier sets
+      if (selectedModifierSetIds.length > 0) {
+        // Delete existing if editing
+        if (isEdit) {
+          const { error: delError } = await supabase
+            .from("product_modifier_sets")
+            .delete()
+            .eq("product_id", productId);
+          if (delError) throw delError;
+        }
+
+        const modToInsert = selectedModifierSetIds.map((id) => ({
+          product_id: productId,
+          modifier_set_id: id,
+          organization_id: organizationId,
+        }));
+        
+        const { error: modError } = await supabase
+          .from("product_modifier_sets")
+          .insert(modToInsert);
+        if (modError) throw modError;
+      }
+
+      // Save categories
+      if (selectedCategoryIds.length > 0) {
+        // Delete existing if editing
+        if (isEdit) {
+          const { error: delError } = await supabase
+            .from("product_categories")
+            .delete()
+            .eq("product_id", productId);
+          if (delError) throw delError;
+        }
+
+        const catToInsert = selectedCategoryIds.map((id) => ({
+          product_id: productId,
+          category_id: id,
+          organization_id: organizationId,
+        }));
+        
+        const { error: catError } = await supabase
+          .from("product_categories")
+          .insert(catToInsert);
+        if (catError) throw catError;
+      }
+
+      onSaved(productId);
+      onClose();
+    } catch (error: any) {
+      toast.error(error.message || "Error guardando el producto");
+      console.error("Save error:", error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => (!v ? onClose() : null)}>
+      <DialogContent className="mb-10 flex h-[100dvh] max-h-[100dvh] max-w-screen flex-col gap-0 overflow-hidden p-0 sm:rounded-none">
+        <DialogHeader className="shrink-0 gap-4 border-b px-6 pb-4 pt-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <DialogTitle className="flex items-center gap-2 text-lg font-semibold">
+              {isEdit ? (
+                <>
+                  <Pencil className="h-4 w-4" />
+                  Editar producto
+                </>
+              ) : (
+                <>
+                  <Plus className="h-4 w-4" />
+                  Nuevo producto
+                </>
+              )}
+            </DialogTitle>
+            <div className="flex flex-wrap items-center gap-2">
+              {isEdit ? (
+                <Button onClick={onSubmit} disabled={saving}>
+                  {saving ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Check className="mr-2 h-4 w-4" />
+                  )}
+                  Guardar
+                </Button>
+              ) : null}
+            </div>
+          </div>
+        </DialogHeader>
+
+        {/* Tabs */}
+        <div className="sticky top-0 z-[10001] shrink-0 border-b bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/90">
+          <div className="mx-auto flex max-w-[1400px] items-center gap-2 overflow-x-auto">
+            {TAB_LABELS.map((label, i) => (
+              <button
+                key={TAB_KEYS[i]}
+                type="button"
+                role="tab"
+                aria-selected={activeTab === TAB_KEYS[i]}
+                onClick={() => setActiveTab(TAB_KEYS[i])}
+                className={cn(
+                  "rounded-full px-3 py-1.5 text-xs font-medium transition sm:px-4 sm:text-sm whitespace-nowrap",
+                  activeTab === TAB_KEYS[i]
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted text-muted-foreground hover:bg-muted/80"
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+          <div className="mx-auto w-full max-w-[1400px] px-6 py-6">
+            
+            {/* Básicos Tab */}
+            <div className={activeTab !== "basic" ? "hidden" : ""}>
+              <div className="space-y-6">
+                <div className="rounded-xl border bg-card p-4 space-y-4">
+                  <div>
+                    <Label htmlFor="product-name">Nombre *</Label>
+                    <Input
+                      id="product-name"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="Ej: Hamburguesa Clásica"
+                    />
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="product-desc">Descripción</Label>
+                    <Textarea
+                      id="product-desc"
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      placeholder="Describe el producto..."
+                      rows={3}
+                    />
+                  </div>
+                  
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <Label>Tipo</Label>
+                      <Select value={itemType} onValueChange={(v: any) => setItemType(v)}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecciona tipo" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="physical">Físico</SelectItem>
+                          <SelectItem value="service">Servicio</SelectItem>
+                          <SelectItem value="digital">Digital</SelectItem>
+                          <SelectItem value="variant">Variante</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  
+                    <div>
+                      <Label>IVA</Label>
+                      <div className="flex gap-2">
+                        <Select value={ivaCategory} onValueChange={(v: any) => setIvaCategory(v)}>
+                          <SelectTrigger className="flex-1">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="GRAVADO">Gravado</SelectItem>
+                            <SelectItem value="EXENTO">Exento</SelectItem>
+                            <SelectItem value="EXCLUIDO">Excluido</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        {ivaCategory === "GRAVADO" && (
+                          <Input
+                            value={ivaRate}
+                            onChange={(e) => setIvaRate(e.target.value)}
+                            placeholder="19"
+                            className="w-20"
+                          />
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {itemType === "variant" && (
+                    <div>
+                      <Label>Tiempo de preparación (min)</Label>
+                      <Input
+                        type="number"
+                        value={preparationTime}
+                        onChange={(e) => setPreparationTime(e.target.value)}
+                        placeholder="15"
+                      />
+                    </div>
+                  )}
+                  
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      checked={available}
+                      onCheckedChange={setAvailable}
+                    />
+                    <Label>Disponible</Label>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Imágenes Tab */}
+            <div className={activeTab !== "images" ? "hidden" : ""}>
+              <div className="rounded-xl border bg-card p-4 space-y-4">
+                <div>
+                  <Label>Imágenes del producto</Label>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Sube imágenes del producto. La primera imagen será la principal.
+                  </p>
+                </div>
+                
+                <input
+                  type="file"
+                  id="image-upload"
+                  multiple
+                  accept="image/*"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const files = Array.from(e.target.files || []);
+                    if (files.length === 0) return;
+                    
+                    setSaving(true);
+                    try {
+                      const bucketName = process.env.NEXT_PUBLIC_BUCKET_NAME || "vetta_images";
+                      const newImages = [];
+                      
+                      for (const file of files) {
+                        const fileExt = file.name.split('.').pop();
+                        const fileName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${fileExt}`;
+                        const filePath = `products/${organizationId || 'temp'}/${fileName}`;
+                        
+                        const { data, error } = await supabase.storage
+                          .from(bucketName)
+                          .upload(filePath, file, {
+                            cacheControl: '3600',
+                            upsert: false
+                          });
+                        
+                        if (error) throw error;
+                        
+                        const { data: { publicUrl } } = supabase.storage
+                          .from(bucketName)
+                          .getPublicUrl(filePath);
+                        
+                        newImages.push({
+                          id: `temp-${Date.now()}-${Math.random()}`,
+                          url: publicUrl,
+                          storage_path: filePath,
+                          is_primary: images.length === 0 && newImages.length === 0,
+                          sort_order: images.length + newImages.length,
+                        });
+                      }
+                      
+                      setImages([...images, ...newImages]);
+                      toast.success(`${files.length} imagen(es) subida(s)`);
+                    } catch (error: any) {
+                      toast.error(error.message || "Error subiendo imágenes");
+                    } finally {
+                      setSaving(false);
+                      // Clear input
+                      e.target.value = '';
+                    }
+                  }}
+                />
+                
+                <div className="border-2 border-dashed rounded-lg p-8 text-center bg-muted/30">
+                  <p className="text-muted-foreground">Arrastra imágenes aquí o haz clic</p>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="mt-2"
+                    onClick={() => document.getElementById("image-upload")?.click()}
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Seleccionar imágenes
+                  </Button>
+                </div>
+                
+                {images.length > 0 && (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                    {images.map((img, i) => (
+                      <div key={img.id || i} className="relative group rounded-lg border bg-background overflow-hidden">
+                        <img 
+                          src={img.url} 
+                          alt="" 
+                          className="w-full h-32 object-cover"
+                        />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
+                          {!img.is_primary && (
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              className="h-7 text-xs"
+                              onClick={() => {
+                                const updated = images.map((im, idx) => ({
+                                  ...im,
+                                  is_primary: idx === i
+                                }));
+                                setImages(updated);
+                              }}
+                            >
+                              ⭐ Principal
+                            </Button>
+                          )}
+                          {img.is_primary && (
+                            <Badge variant="default" className="text-xs">Principal</Badge>
+                          )}
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            className="h-7 w-7 p-0"
+                            onClick={() => {
+                              const updated = images.filter((_, idx) => idx !== i);
+                              // If we deleted the primary, make the first image primary
+                              if (img.is_primary && updated.length > 0) {
+                                updated[0].is_primary = true;
+                              }
+                              setImages(updated);
+                            }}
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
+                        </div>
+                        <p className="text-xs p-1 text-center text-muted-foreground">
+                          {img.is_primary ? "⭐ Principal" : `Imagen ${i + 1}`}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Variantes Tab */}
+            <div className={activeTab !== "variants" ? "hidden" : ""}>
+              <div className="rounded-xl border bg-card p-4">
+                <div className="flex justify-between items-center mb-4">
+                  <Label>Variantes</Label>
+                  <Button 
+                    size="sm" 
+                    variant="outline"
+                    onClick={() => {
+                      if (!variantName.trim()) {
+                        toast.error("Ingresa un nombre para la variante");
+                        return;
+                      }
+                      const newVariant = {
+                        id: `temp-${Date.now()}`,
+                        name: variantName,
+                        price: variantPrice,
+                        sku: variantSku,
+                      };
+                      setVariants([...variants, newVariant]);
+                      setVariantName("");
+                      setVariantPrice("");
+                      setVariantSku("");
+                    }}
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Agregar variante
+                  </Button>
+                </div>
+                
+                {/* Add variant form */}
+                <div className="mb-4 space-y-3 rounded-lg border p-3">
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div>
+                      <Label htmlFor="variant-name">Nombre</Label>
+                      <Input
+                        id="variant-name"
+                        value={variantName}
+                        onChange={(e) => setVariantName(e.target.value)}
+                        placeholder="Ej: Clásica"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="variant-price">Precio</Label>
+                      <Input
+                        id="variant-price"
+                        value={variantPrice}
+                        onChange={(e) => setVariantPrice(e.target.value)}
+                        placeholder="25000"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="variant-sku">SKU</Label>
+                      <Input
+                        id="variant-sku"
+                        value={variantSku}
+                        onChange={(e) => setVariantSku(e.target.value)}
+                        placeholder="HAM-CLAS-001"
+                      />
+                    </div>
+                  </div>
+                </div>
+                
+                {variants.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-8">
+                    No hay variantes. Agrega una arriba.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {variants.map((v, i) => (
+                      <div key={v.id || i} className="rounded-lg border overflow-hidden">
+                        <div className="p-3 flex justify-between items-center">
+                          <div>
+                            <p className="font-medium">{v.name || `Variante ${i + 1}`}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {v.price ? `$${v.price}` : "Sin precio"} 
+                              {v.sku && ` | SKU: ${v.sku}`}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setExpandedVariantId(
+                                  expandedVariantId === v.id ? null : v.id
+                                );
+                              }}
+                            >
+                              Inventario ({inventoryByVariant[v.id]?.length || 0})
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setVariants(variants.filter((_, idx) => idx !== i));
+                                // Also remove inventory for this variant
+                                const newInv = { ...inventoryByVariant };
+                                delete newInv[v.id];
+                                setInventoryByVariant(newInv);
+                              }}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                        
+                        {/* Expandable Inventory Section */}
+                        {expandedVariantId === v.id && (
+                          <div className="border-t bg-muted/30 p-3 space-y-3">
+                            <p className="text-sm font-medium">Inventario</p>
+                            
+                            {/* Inventory Rows */}
+                            {(inventoryByVariant[v.id] || []).map((row: any, rowIdx: number) => (
+                              <div key={row.id || rowIdx} className="grid grid-cols-4 gap-2 items-end">
+                                <div>
+                                  <Label className="text-xs">Bodega</Label>
+                                  <Select
+                                    value={row.warehouse_id || ""}
+                                    onValueChange={(val: string) => {
+                                      const updated = { ...inventoryByVariant };
+                                      if (!updated[v.id]) updated[v.id] = [];
+                                      updated[v.id][rowIdx] = { ...row, warehouse_id: val };
+                                      setInventoryByVariant(updated);
+                                    }}
+                                  >
+                                    <SelectTrigger className="h-8 text-xs">
+                                      <SelectValue placeholder="Bodega" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {warehouses.map((w: any) => (
+                                        <SelectItem key={w.id} value={w.id}>
+                                          {w.name}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                <div>
+                                  <Label className="text-xs">Lote</Label>
+                                  <Input
+                                    className="h-8 text-xs"
+                                    value={row.batch_code || ""}
+                                    onChange={(e) => {
+                                      const updated = { ...inventoryByVariant };
+                                      if (!updated[v.id]) updated[v.id] = [];
+                                      updated[v.id][rowIdx] = { ...row, batch_code: e.target.value };
+                                      setInventoryByVariant(updated);
+                                    }}
+                                    placeholder="L2026-001"
+                                  />
+                                </div>
+                                <div>
+                                  <Label className="text-xs">Cant.</Label>
+                                  <Input
+                                    className="h-8 text-xs"
+                                    type="number"
+                                    value={row.quantity || ""}
+                                    onChange={(e) => {
+                                      const updated = { ...inventoryByVariant };
+                                      if (!updated[v.id]) updated[v.id] = [];
+                                      updated[v.id][rowIdx] = { ...row, quantity: e.target.value };
+                                      setInventoryByVariant(updated);
+                                    }}
+                                    placeholder="50"
+                                  />
+                                </div>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 w-8 p-0"
+                                  onClick={() => {
+                                    const updated = { ...inventoryByVariant };
+                                    if (!updated[v.id]) updated[v.id] = [];
+                                    updated[v.id] = updated[v.id].filter((_: any, idx: number) => idx !== rowIdx);
+                                    setInventoryByVariant(updated);
+                                  }}
+                                >
+                                  <X className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            ))}
+                            
+                            {/* Add Row Button */}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-xs"
+                              onClick={() => {
+                                const updated = { ...inventoryByVariant };
+                                if (!updated[v.id]) updated[v.id] = [];
+                                updated[v.id].push({
+                                  id: `temp-${Date.now()}`,
+                                  warehouse_id: warehouses[0]?.id || "",
+                                  batch_code: "",
+                                  quantity: "",
+                                });
+                                setInventoryByVariant(updated);
+                              }}
+                            >
+                              <Plus className="mr-1 h-3 w-3" />
+                              Agregar fila
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Más Tab */}
+            <div className={activeTab !== "more" ? "hidden" : ""}>
+              <div className="space-y-4">
+                {/* Modificadores */}
+                <div className="rounded-xl border bg-card p-4 space-y-3">
+                  <div className="flex justify-between items-center">
+                    <h3 className="font-medium">Modificadores</h3>
+                    <Select
+                      onValueChange={(val: string) => {
+                        if (!val) return;
+                        if (selectedModifierSetIds.includes(val)) {
+                          toast.error("Este modificador ya está agregado");
+                          return;
+                        }
+                        setSelectedModifierSetIds([...selectedModifierSetIds, val]);
+                      }}
+                    >
+                      <SelectTrigger className="h-8 text-xs w-[200px]">
+                        <SelectValue placeholder="Agregar modificador" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {modifierSets
+                          .filter((m: any) => !selectedModifierSetIds.includes(m.id))
+                          .map((m: any) => (
+                            <SelectItem key={m.id} value={m.id}>
+                              {m.display_name || m.name}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {selectedModifierSetIds.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No hay modificadores seleccionados.
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {selectedModifierSetIds.map((id, idx) => {
+                        const mod = modifierSets.find((m: any) => m.id === id);
+                        return (
+                          <div key={id} className="flex items-center justify-between rounded-lg border p-2">
+                            <span className="text-sm">{mod?.display_name || mod?.name || "Modificador"}</span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 p-0"
+                              onClick={() => {
+                                setSelectedModifierSetIds(
+                                  selectedModifierSetIds.filter((_, i) => i !== idx)
+                                );
+                              }}
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+                
+                {/* Unidades y detalles */}
+                <div className="rounded-xl border bg-card p-4 space-y-3">
+                  <h3 className="font-medium">Unidades y detalles</h3>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <Label htmlFor="unit-code">Código de unidad</Label>
+                      <Input
+                        id="unit-code"
+                        placeholder="UN (Unidad)"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="content-unit">Unidad de contenido</Label>
+                      <Input
+                        id="content-unit"
+                        placeholder="KG, L, UN"
+                      />
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Impuestos adicionales */}
+                <div className="rounded-xl border bg-card p-4 space-y-3">
+                  <h3 className="font-medium">Impuestos adicionales</h3>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <Label htmlFor="inc-type">Tipo INC</Label>
+                      <Select>
+                        <SelectTrigger id="inc-type">
+                          <SelectValue placeholder="Selecciona INC" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="NINGUNO">Ninguno</SelectItem>
+                          <SelectItem value="INC_1">INC 1</SelectItem>
+                          <SelectItem value="INC_2">INC 2</SelectItem>
+                          <SelectItem value="INC_3">INC 3</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label htmlFor="inc-rate">Tasa INC (%)</Label>
+                      <Input
+                        id="inc-rate"
+                        type="number"
+                        placeholder="0"
+                      />
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Categorías y canales */}
+                <div className="rounded-xl border bg-card p-4 space-y-3">
+                  <div className="flex justify-between items-center">
+                    <h3 className="font-medium">Categorías y canales</h3>
+                    <Select
+                      onValueChange={(val: string) => {
+                        if (!val) return;
+                        if (selectedCategoryIds.includes(val)) {
+                          toast.error("Esta categoría ya está agregada");
+                          return;
+                        }
+                        setSelectedCategoryIds([...selectedCategoryIds, val]);
+                      }}
+                    >
+                      <SelectTrigger className="h-8 text-xs w-[200px]">
+                        <SelectValue placeholder="Agregar categoría" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {categories
+                          .filter((c: any) => !selectedCategoryIds.includes(c.id))
+                          .map((c: any) => (
+                            <SelectItem key={c.id} value={c.id}>
+                              {c.name}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {selectedCategoryIds.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No hay categorías seleccionadas.
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {selectedCategoryIds.map((id, idx) => {
+                        const cat = categories.find((c: any) => c.id === id);
+                        return (
+                          <div key={id} className="flex items-center justify-between rounded-lg border p-2">
+                            <span className="text-sm">{cat?.name || "Categoría"}</span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 p-0"
+                              onClick={() => {
+                                setSelectedCategoryIds(
+                                  selectedCategoryIds.filter((_, i) => i !== idx)
+                                );
+                              }}
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter className="sticky bottom-0 mx-auto flex w-full max-w-[1400px] shrink-0 flex-wrap items-center justify-between gap-3 border-t bg-background/80 px-6 py-4 backdrop-blur sm:px-4">
+          <Button variant="outline" onClick={onClose} disabled={saving}>
+            <X className="mr-1 h-4 w-4" />
+            Cancelar
+          </Button>
+          <Button onClick={onSubmit} disabled={saving}>
+            {saving ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Check className="mr-2 h-4 w-4" />
+            )}
+            Guardar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}

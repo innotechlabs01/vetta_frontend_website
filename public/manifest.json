@@ -1,7 +1,7 @@
 {
-  "name": "Recompry POS",
-  "short_name": "Recompry",
-  "description": "Recompry desktop companion with offline-ready dashboard.",
+  "name": "Vetta POS",
+  "short_name": "Vetta",
+  "description": "Vetta desktop companion with offline-ready dashboard.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0f172a",

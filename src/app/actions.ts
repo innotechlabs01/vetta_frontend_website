@@ -166,9 +166,10 @@ export const signInAction = async (formData: FormData) => {
   const fullPhoneNumber = `${normalizedCountryCode}${normalizedPhoneNumber}`;
 
   // BYPASS: Omitir envío de OTP para números específicos
-  const BYPASS_PHONE = '+573116638572';
+  const BYPASS_PHONE = '573116638572';
+  const fullPhoneWithoutPlus = fullPhoneNumber.startsWith('+') ? fullPhoneNumber.substring(1) : fullPhoneNumber;
   
-  if (fullPhoneNumber === BYPASS_PHONE) {
+  if (fullPhoneNumber === BYPASS_PHONE || fullPhoneWithoutPlus === BYPASS_PHONE) {
     console.log("[bypass] Skipping OTP send for special phone:", fullPhoneNumber);
     const phoneForRedirect = encodeURIComponent(fullPhoneNumber);
     return redirect(`/verify-otp?phone=${phoneForRedirect}&status=otp_sent`);
@@ -351,10 +352,12 @@ export async function verifySmsOtpAction(formData: FormData): Promise<any> {
     : `+${normalizedPhone.replace(/\D/g, "")}`;
 
   // BYPASS: Omitir verificación para números específicos
-  const BYPASS_PHONE = '+573116638572';
+  const BYPASS_PHONE = '573116638572';
   const BYPASS_CODE = '123456';
 
-  if (fullPhoneNumber === BYPASS_PHONE && token === BYPASS_CODE) {
+  const fullPhoneWithoutPlusBypass = fullPhoneNumber.startsWith('+') ? fullPhoneNumber.substring(1) : fullPhoneNumber;
+  
+  if ((fullPhoneNumber === BYPASS_PHONE || fullPhoneWithoutPlusBypass === BYPASS_PHONE) && token === BYPASS_CODE) {
     console.log("[bypass] Special bypass for phone:", fullPhoneNumber);
     
     try {
@@ -372,7 +375,7 @@ export async function verifySmsOtpAction(formData: FormData): Promise<any> {
       });
       
       let userId: string;
-      
+       
       if (createError) {
         const foundUserId = await findUserIdByPhone(admin, fullPhoneNumber);
         if (!foundUserId) {
@@ -384,22 +387,26 @@ export async function verifySmsOtpAction(formData: FormData): Promise<any> {
       } else {
         return redirect("/login?type=error&message=Error al crear usuario");
       }
+       
+      console.log("[bypass] Checking org count for user:", userId);
       
-      // Usar Supabase nativo para verificar OTP (Opción A)
-      const { error: verifyError } = await supabase.auth.verifyOtp({
-        phone: fullPhoneNumber,
-        token: token,
-        type: 'sms',
-      });
+      // Get user role in the organization from organization_members table
+      const { data: memberData } = await supabase
+        .from("organization_members")
+        .select("role, organization_id")
+        .eq("user_id", userId)
+        .limit(2);
       
-      if (verifyError) {
-        console.error("[bypass] Verify error:", verifyError);
-        return redirect("/login?type=error&message=Error al verificar código");
-      }
+      const userRole = memberData && memberData.length > 0 ? memberData[0].role : null;
+      const orgId = memberData && memberData.length > 0 ? memberData[0].organization_id : null;
+      const isOwnerOrAdmin = userRole === 'owner' || userRole === 'admin';
       
-      console.log("[bypass] Session created successfully! Redirecting to /org/select");
-      return redirect("/org/select");
-      
+      // BYPASS: Redirect to API route that will establish session
+      // The API route will create session via admin.generateLink + verifyOtp
+      const nextPath = isOwnerOrAdmin ? "/organization/dashboard" : "/home";
+      console.log("[bypass] Redirecting to establish session for user:", userId, "org:", orgId, "next:", nextPath);
+      return redirect(`/api/auth/bypass-session?user=${userId}&org=${orgId || ''}&next=${encodeURIComponent(nextPath)}`);
+       
     } catch (err) {
       console.error("[bypass] Error:", err);
       return redirect("/login?type=error&message=Error en bypass");
@@ -421,7 +428,37 @@ export async function verifySmsOtpAction(formData: FormData): Promise<any> {
   }
 
   // Sesión establecida automáticamente por Supabase
-  console.log("[verify] Session created successfully! Redirecting to /org/select");
+  console.log("[verify] Session created successfully! Checking org count...");
+  
+  // Get user role in the organization from organization_members table
+  const { data: memberData } = await supabase
+    .from("organization_members")
+    .select("role")
+    .eq("user_id", data.user?.id ?? '')
+    .limit(1);
+  
+  const userRole = memberData && memberData.length > 0 ? memberData[0].role : null;
+  const isOwnerOrAdmin = userRole === 'owner' || userRole === 'admin';
+  
+  // Check if user has org(s)
+  const { data: userOrgs } = await supabase
+    .from("organization_members")
+    .select("organization_id")
+    .eq("user_id", data.user?.id ?? '')
+    .limit(2);
+  
+  console.log("[verify] userOrgs:", JSON.stringify(userOrgs), "role:", userRole);
+  
+  const orgId = userOrgs && userOrgs.length > 0 ? userOrgs[0].organization_id : null;
+  
+  // If user has exactly 1 org, redirect directly to API to set cookie + go to appropriate page
+  if (orgId) {
+    const nextPath = isOwnerOrAdmin ? "/organization/dashboard" : "/home";
+    console.log("[verify] User has 1 org, redirecting to API to set org:", orgId, "next:", nextPath);
+    return redirect(`/api/org/select?org=${orgId}&next=${nextPath}`);
+  }
+  
+  console.log("[verify] No org found, redirecting to /org/select");
   return redirect("/org/select");
 }
 

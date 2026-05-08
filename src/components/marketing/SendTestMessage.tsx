@@ -36,7 +36,7 @@ export function SendTestMessage({ onSend, orgId }: SendTestMessageProps) {
           id: "13ebcbe3-dffb-4bac-a554-aa3b33fe5185",
           name: "Test Message",
           parameters: {
-            message: "This is a test message from your Recompry organization"
+            message: "This is a test message from your Vetta organization"
           }
         },
         channel: "sms"

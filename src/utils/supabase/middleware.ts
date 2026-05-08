@@ -22,7 +22,7 @@ export const updateSession = async (request: NextRequest) => {
   const accept = request.headers.get("accept") || "";
   const expectsHtml = accept.includes("text/html");
 
-  const PUBLIC_PATHS = ["/login", "/verify-otp"];
+  const PUBLIC_PATHS = ["/login", "/verify-otp", "/api/auth/bypass-session"];
   const isPublic = PUBLIC_PATHS.some((path) => pathname.startsWith(path));
 
   if (isPublic) {

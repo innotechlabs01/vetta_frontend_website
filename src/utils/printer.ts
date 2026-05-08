@@ -11,7 +11,7 @@ export type PrinterConfig = {
   [key: string]: unknown;
 };
 
-export const PRINTER_LOCAL_STORAGE_KEY = "recompry.pos.printer";
+export const PRINTER_LOCAL_STORAGE_KEY = "Vetta.pos.printer";
 
 function normalizeMode(mode?: string | null): string | undefined {
   if (!mode) return undefined;

@@ -1,8 +1,8 @@
-# Recompry App - Modulos y Areas
+# Vetta App - Modulos y Areas
 
 ## 1) Vision general
 
-Recompry App es el centro de operaciones de:
+Vetta App es el centro de operaciones de:
 
 - La tienda online.
 - El POS (Punto de Venta).
@@ -46,7 +46,7 @@ Archivos clave:
 
 ## 3) Multitenant y cambio de entorno
 
-Recompry App es multitenant. La organizacion activa define los datos visibles y operables en cada modulo.
+Vetta App es multitenant. La organizacion activa define los datos visibles y operables en cada modulo.
 
 ### 3.1 Como se determina la organizacion actual
 
@@ -262,7 +262,7 @@ La capa de impresion funciona mediante `window.electron` con capacidades:
 Comportamiento:
 
 - `PrinterContext` detecta bridge y sincroniza impresora seleccionada.
-- La seleccion se guarda en `localStorage` (`recompry.pos.printer`).
+- La seleccion se guarda en `localStorage` (`Vetta.pos.printer`).
 - POS usa `printDocument` para cocina/precuenta/factura.
 - Zonas de impresion reutilizan la misma base de impresoras.
 

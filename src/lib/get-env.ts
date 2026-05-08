@@ -61,11 +61,11 @@ export type Environment = {
 export const getMenuConfig = cache(async (supabase: any, orgId: string | null) => {
   if (!orgId) return [];
   
-  const { data, error } = await supabase
-    .from('menu_config')
-    .select('path, label, icon_name, is_active, sort_order, parent_id, is_father, always_visible, visible_to_roles')
-    .eq('organization_id', orgId)
-    .order('sort_order', { ascending: true });
+   const { data, error } = await supabase
+     .from('menu_config')
+     .select('id, path, label, icon_name, is_active, sort_order, parent_id, is_father, always_visible, visible_to_roles')
+     .eq('organization_id', orgId)
+     .order('sort_order', { ascending: true });
   
   if (error) {
     console.error('Error fetching menu config:', error);

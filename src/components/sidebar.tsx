@@ -27,77 +27,106 @@ import { getIcon } from "@/lib/icon-map"
 const isProd = process.env.NODE_ENV === "production"
 const safeHref = (href: string) => (isProd ? "/we-are-working" : href)
 
-// Build menu items from dynamic config
-const buildMenuFromConfig = (menuConfig: any[], memberRole: string | null, userMenuAccess: string[] | null) => {
-  if (!menuConfig || menuConfig.length === 0) {
-    // Fallback to default items if no config
-    const defaultItems = [
-      { label: "Inicio", href: "/home", icon: "Home" },
-      { label: "Punto de Venta", href: "/pos/new", icon: "Store" },
-      { label: "Pedidos", href: "/sales", icon: "ShoppingCart" },
-      { label: "Domicilios", href: "/deliveries", icon: "Bike" },
-      { label: "Clientes", href: "/customers", icon: "Users" },
-    ];
-    return defaultItems.map(item => ({
-      ...item,
-      icon: getIcon(item.icon),
-    }));
-  }
-
-  // If user has custom menu access, filter by those paths
-  const userAccessiblePaths = userMenuAccess && Array.isArray(userMenuAccess) && userMenuAccess.length > 0
-    ? new Set(userMenuAccess)
-    : null;
-
-  // Filter by active status, role-based visibility, and parent-child
-  const canSeeItem = (item: any) => {
-    if (!item.is_active) return false;
-    
-    // Always visible items (e.g., Inicio) - skip role check
-    if (item.always_visible) return true;
-    
-    // If user has custom menu access, check if path is in their list
-    if (userAccessiblePaths && userAccessiblePaths.has(item.path)) {
-      return true;
+  // Build menu items from dynamic config
+  const buildMenuFromConfig = (menuConfig: any[], memberRole: string | null, userMenuAccess: string[] | null) => {
+    if (!menuConfig || menuConfig.length === 0) {
+      // Fallback to default items if no config
+      const defaultItems = [
+        { label: "Inicio", href: "/home", icon: "Home" },
+        { label: "Punto de Venta", href: "/pos/new", icon: "Store" },
+        { label: "Pedidos", href: "/sales", icon: "ShoppingCart" },
+        { label: "Domicilios", href: "/deliveries", icon: "Bike" },
+        { label: "Clientes", href: "/customers", icon: "Users" },
+      ];
+      return defaultItems.map(item => ({
+        ...item,
+        icon: getIcon(item.icon),
+      }));
     }
-    
-    // Otherwise, check role-based visibility
-    const visibleRoles = item.visible_to_roles || ['owner', 'admin', 'manager', 'member', 'viewer'];
-    if (!visibleRoles.includes(memberRole || '')) return false;
-    
-    return true;
+
+    // If user has custom menu access, filter by those paths
+    const userAccessiblePaths = userMenuAccess && Array.isArray(userMenuAccess) && userMenuAccess.length > 0
+      ? new Set(userMenuAccess)
+      : null;
+
+    // First pass: determine which TOP-LEVEL items (no parent_id) are accessible
+    // Their children will inherit this accessibility
+    const accessibleParentIds = new Set();
+    if (userAccessiblePaths) {
+      menuConfig.forEach(item => {
+        if (!item.parent_id && item.is_active && userAccessiblePaths.has(item.path)) {
+          accessibleParentIds.add(item.id);
+        }
+      });
+    }
+
+    // Filter function
+    const canSeeItem = (item: any): boolean => {
+      // Must be active
+      if (!item.is_active) return false;
+
+      // Always visible items
+      if (item.always_visible) return true;
+
+      // If user has custom menu access
+      if (userAccessiblePaths) {
+        // If this is a child item and its parent is accessible, show it
+        if (item.parent_id && accessibleParentIds.has(item.parent_id)) {
+          return true;
+        }
+
+        // Otherwise check if this item's path is in the accessible set
+        return userAccessiblePaths.has(item.path);
+      }
+
+      // Role-based visibility
+      const visibleRoles = item.visible_to_roles || ['owner', 'admin', 'manager', 'member', 'viewer'];
+      return visibleRoles.includes(memberRole || '');
+    };
+
+    // Get top-level items (no parent)
+    const topLevel = menuConfig
+      .filter(item => !item.parent_id && canSeeItem(item))
+      .sort((a, b) => a.sort_order - b.sort_order);
+
+    const normalizeId = (val: any): string => {
+      if (!val) return '';
+      const str = String(val);
+      return str.trim().toLowerCase();
+    };
+
+    // Build hierarchy - pass accessibleParentIds to inherit visibility
+    return topLevel.map(item => {
+      const itemId = normalizeId(item.id);
+      const children = menuConfig
+        .filter(child => {
+          if (!child.parent_id) return false;
+          if (!canSeeItem(child)) return false;
+          const childParentId = normalizeId(child.parent_id);
+          return childParentId === itemId;
+        })
+        .sort((a, b) => a.sort_order - b.sort_order)
+        .map(child => ({
+          label: child.label,
+          href: child.path,
+          icon: getIcon(child.icon_name),
+        }));
+
+      return {
+        label: item.label,
+        href: item.path,
+        icon: getIcon(item.icon_name),
+        ...(children.length > 0 && { items: children }),
+      };
+    });
   };
 
-  // Get top-level items (no parent)
-  const topLevel = menuConfig
-    .filter(item => !item.parent_id && canSeeItem(item))
-    .sort((a, b) => a.sort_order - b.sort_order);
-
-  // Build hierarchy
-  return topLevel.map(item => {
-    const children = menuConfig
-      .filter(child => child.parent_id === item.id && canSeeItem(child))
-      .sort((a, b) => a.sort_order - b.sort_order)
-      .map(child => ({
-        label: child.label,
-        href: child.path,
-        icon: getIcon(child.icon_name),
-      }));
-
-    return {
-      label: item.label,
-      href: item.path,
-      icon: getIcon(item.icon_name),
-      ...(children.length > 0 && { items: children }),
-    };
-  });
-};
 
 const footerItems = [
   { label: "Configuraciones", redirect: "/settings/general", href: "/settings", icon: Settings },
 ]
 
-// Tipos
+// Types
 type OrgRow = { id: string; name: string; slug: string | null }
 
 const Sidebar = () => {
@@ -131,7 +160,6 @@ const Sidebar = () => {
 
   // Avatar
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
-
   
   // Build menuItems based on user role and dynamic config
   const menuItems = useMemo(() => {
@@ -139,7 +167,6 @@ const Sidebar = () => {
   }, [menuConfig, memberRole, userMenuAccess]);
 
   // Add admin-only items (Dashboard, etc.) after dynamic items
-  // Moved to menu_config table - no longer need to hardcode
   const allMenuItems = useMemo(() => {
     return menuItems;
   }, [menuItems]);
@@ -153,7 +180,7 @@ const Sidebar = () => {
     } else {
       setOpenMenu({})
     }
-  }, [pathname])
+  }, [pathname, menuItems])
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -246,9 +273,8 @@ const Sidebar = () => {
     || "U"
 
   const isActive = (href: string, opts: { hasChildren?: boolean; strict?: boolean } = {}) => {
-    const { hasChildren = false, strict = false } = opts
+    const { strict = false } = opts
     if (href === "/home" && pathname === "/") return true
-    if (hasChildren) return pathname === href
     if (strict) return pathname === href
     return pathname === href || pathname.startsWith(`${href}/`)
   }
@@ -364,14 +390,14 @@ const Sidebar = () => {
         </button>
 
         <Link href="/" className="absolute left-1/2 -translate-x-1/2">
-          <Image
+          {/*<Image
             src="/logo.svg"
-            alt="Recompry Logo"
+            alt="Vetta Logo"
             width={110}
             height={28}
             className="h-7 w-auto"
             priority
-          />
+          />*/}
         </Link>
 
         <div className="relative" ref={mobileUserRef}>
@@ -476,14 +502,14 @@ const Sidebar = () => {
             </button>
 
             <Link href="/" className={`flex items-center ${collapsed ? "justify-center" : "pl-2"} mb-0`}>
-              <Image
+              {/*<Image
                 src="/logo.svg"
-                alt="Recompry Logo"
+                alt="Vetta Logo"
                 width={collapsed ? 36 : 135}
                 height={35}
                 className={`${collapsed ? " h-[35px] object-cover object-left" : "h-[35px] w-auto"}`}
                 priority
-              />
+              />*/}
             </Link>
           </div>  
 
@@ -517,12 +543,12 @@ const Sidebar = () => {
                   <div className="text-xs text-gray-500 truncate">
                     {org?.slug ? (
                       <a
-                        href={`https://${org.slug}.recompry.site`}
+                        href={`https://${org.slug}.vetta.site`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="hover:underline"
                       >
-                        {`${org.slug}.recompry.site`}
+                        {`${org.slug}.vetta.site`}
                       </a>
                     ) : ""}
                   </div>
@@ -531,90 +557,91 @@ const Sidebar = () => {
                 <div className="px-2 py-2 ">
                   <div className="px-2 pb-2 text-xs uppercase text-gray-500">Tus Negocios</div>
 
-                  {loadingOrgs ? (
-                    <div className="px-2 py-1 text-sm text-gray-500">Cargando...</div>
-                  ) : orgs.length === 0 ? (
-                    <div className="px-2 py-1 text-sm text-gray-500">No perteneces a ninguna</div>
-                  ) : (
-                <ul className="space-y-1 max-h-56 overflow-y-auto no-scrollbar">
-                      {orgs.map(o => {
-                        const isCurrent = o.id === org?.id
-                        return (
-                          <li key={o.id}>
-                            <button
-                              type="button"
-                              onClick={() => { if (!isCurrent) switchOrg(o.id) }}
-                              disabled={isCurrent || switchingOrgId !== null}
-                              className={`w-full px-2 py-2 text-sm rounded-md flex items-center justify-between transition-colors hover:bg-gray-50 disabled:opacity-60 disabled:cursor-not-allowed ${isCurrent ? "bg-blue-50 text-blue-700" : "text-gray-800"}`}
-                            >
-                              <span className="truncate">{o.name}</span>
-                              {isCurrent ? (
-                                <Check className="w-4 h-4" />
-                              ) : switchingOrgId === o.id ? (
-                                <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
-                              ) : null}
-                            </button>
-                          </li>
-                        )
-                      })}
-                    </ul>
-                  )}
-
-                  <div className="mt-2">
-                    <Link
-                      href="/org/select"
-                      prefetch
-                      className="w-full inline-flex items-center justify-between text-sm px-3 py-2 rounded-md border hover:bg-gray-50"
-                      onClick={() => setOrgOpen(false)}
-                    >
-                      <span>Administrar Negocios</span>
-                      <ChevronRight className="w-4 h-4" />
-                    </Link>
-                  </div>
-
-                  {/* Location Selector - only show if multiple locations */}
-                  {organizationLocations.length > 1 && (
-                    <>
-                      <hr className="my-2" />
-                      <div className="px-2 pb-2 text-xs uppercase text-gray-500">Sucursales</div>
-                      <ul className="space-y-1 max-h-40 overflow-y-auto">
-                        {organizationLocations.map(loc => {
-                          const isCurrentLoc = loc.id === currentLocationId;
+                    {loadingOrgs ? (
+                      <div className="px-2 py-1 text-sm text-gray-500">Cargando...</div>
+                    ) : orgs.length === 0 ? (
+                      <div className="px-2 py-1 text-sm text-gray-500">No perteneces a ninguna</div>
+                    ) : (
+                  <ul className="space-y-1 max-h-56 overflow-y-auto no-scrollbar">
+                        {orgs.map(o => {
+                          const isCurrent = o.id === org?.id
                           return (
-                            <li key={loc.id}>
+                            <li key={o.id}>
                               <button
                                 type="button"
-                                onClick={() => {
-                                  window.location.href = `/api/location/select?location=${loc.id}`;
-                                }}
-                                disabled={isCurrentLoc}
-                                className={`w-full px-2 py-1.5 text-sm rounded-md flex items-center justify-between transition-colors hover:bg-gray-50 disabled:opacity-60 disabled:cursor-not-allowed ${isCurrentLoc ? "bg-green-50 text-green-700" : "text-gray-800"}`}
+                                onClick={() => { if (!isCurrent) switchOrg(o.id) }}
+                                disabled={isCurrent || switchingOrgId !== null}
+                                className={`w-full px-2 py-2 text-sm rounded-md flex items-center justify-between transition-colors hover:bg-gray-50 disabled:opacity-60 disabled:cursor-not-allowed ${isCurrent ? "bg-blue-50 text-blue-700" : "text-gray-800"}`}
                               >
-                                <span className="truncate">{loc.name}</span>
-                                {isCurrentLoc ? (
-                                  <Check className="w-3 h-3" />
-                                ) : (
-                                  <ChevronRight className="w-3 h-3 text-gray-400" />
-                                )}
+                                <span className="truncate">{o.name}</span>
+                                {isCurrent ? (
+                                  <Check className="w-4 h-4" />
+                                ) : switchingOrgId === o.id ? (
+                                  <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+                                ) : null}
                               </button>
                             </li>
-                          );
+                          )
                         })}
                       </ul>
-                    </>
-                  )}
+                    )}
+
+                    <div className="mt-2">
+                      <Link
+                        href="/org/select"
+                        prefetch
+                        className="w-full inline-flex items-center justify-between text-sm px-3 py-2 rounded-md border hover:bg-gray-50"
+                        onClick={() => setOrgOpen(false)}
+                      >
+                        <span>Administrar Negocios</span>
+                        <ChevronRight className="w-4 h-4" />
+                      </Link>
+                    </div>
+
+                    {/* Location Selector - only show if multiple locations */}
+                    {organizationLocations.length > 1 && (
+                      <>
+                        <hr className="my-2" />
+                        <div className="px-2 pb-2 text-xs uppercase text-gray-500">Sucursales</div>
+                        <ul className="space-y-1 max-h-40 overflow-y-auto">
+                          {organizationLocations.map(loc => {
+                            const isCurrentLoc = loc.id === currentLocationId;
+                            return (
+                              <li key={loc.id}>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    window.location.href = `/api/location/select?location=${loc.id}`;
+                                  }}
+                                  disabled={isCurrentLoc}
+                                  className={`w-full px-2 py-1.5 text-sm rounded-md flex items-center justify-between transition-colors hover:bg-gray-50 disabled:opacity-60 disabled:cursor-not-allowed ${isCurrentLoc ? "bg-green-50 text-green-700" : "text-gray-800"}`}
+                                >
+                                  <span className="truncate">{loc.name}</span>
+                                  {isCurrentLoc ? (
+                                    <Check className="w-3 h-3" />
+                                  ) : (
+                                    <ChevronRight className="w-3 h-3 text-gray-400" />
+                                  )}
+                                </button>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </>
+                    )}
+                  </div>
                 </div>
-              </div>
             </div>
           )}
 
           {/* Menú scrollable */}
           <div className="flex-1 overflow-y-auto no-scrollbar">
             <ul className="space-y-0">
-              {menuItems.map((item) => {
-                const Icon = item.icon
-                const hasChildren = Array.isArray((item as any).items) && (item as any).items.length > 0
-                const active = isActive(item.href, { hasChildren })
+               {menuItems.map((item) => {
+                 const Icon = item.icon
+                 const itemItems = (item as any).items;
+                 const hasChildren = Array.isArray(itemItems) && itemItems.length > 0;
+                 const active = isActive(item.href, { hasChildren })
                 const isOpenSub = !!openMenu[item.href]
 
                 return (
@@ -691,23 +718,18 @@ const Sidebar = () => {
                           )}
                         </div>
 
-                        {/* Submenú (oculto completamente en colapsado) */}
-                        {showLabel && (
-                          <div
-                            id={`submenu-${item.href}`}
-                            className={`${isOpenSub ? "block" : "hidden"} relative`}
-                          >
-                            
-                            <span aria-hidden className={`
-                              ${
-                                collapsed ? "left-4" : "left-6"
-                              }
-                              z-0
-                              pointer-events-none absolute  top-0 bottom-4 w-px bg-gray-300  
-                            `} />
+                          {/* Submenú (oculto completamente en colapsado) */}
+                         {showLabel && !collapsed && hasChildren && (
+                           <div
+                             id={`submenu-${item.href}`}
+                             className="relative"
+                             style={{ display: isOpenSub ? "block" : "none" }}
+                           >
+                             
+                             <span aria-hidden className="z-0 pointer-events-none absolute left-6 top-0 bottom-4 w-px bg-gray-300" />
 
-                            <ul className="pt-1 relative z-1 space-y-1">
-                              {(item as any).items.map((child: any) => {
+                             <ul className="pt-1 relative z-1 space-y-1">
+                               {itemItems.map((child: any) => {
                                 const childActive = isActive(child.href, { strict: !!child.strict })
                                 const ChildIcon = child.icon
                                 return (
@@ -715,20 +737,13 @@ const Sidebar = () => {
                                     <Link
                                       href={child.href}
                                       prefetch
-                                      className={` flex items-center gap-2 text-sm p-2 py-1.5 rounded-lg 
-                                        ${
-                                          collapsed ? "pl-[10px] bg-gray-200" : "pl-[40px]"
-                                        }
-                                        ${
+                                      className={`flex items-center gap-2 text-sm p-2 py-1.5 rounded-lg pl-[40px] ${
                                         childActive
                                           ? "!bg-blue-100 text-blue-600"
                                           : "text-gray-700 hover:text-gray-900 hover:bg-gray-200"
                                       }`}
-                                      title={collapsed ? child.label : undefined}
-                                      onMouseEnter={(e) => handleShowTooltip(child.label, e.currentTarget)}
-                                      onMouseLeave={handleHideTooltip}
                                     >
-                                      
+                                      {ChildIcon && <ChildIcon className="w-4 h-4 shrink-0" />}
                                       <span className="truncate">{child.label}</span>
                                     </Link>
                                   </li>

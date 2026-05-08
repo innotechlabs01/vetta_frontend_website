@@ -40,7 +40,7 @@ export default function QrCodesModule({ orgId, orgSlug, locations, initialQrCont
   const [refreshing, setRefreshing] = useState(false);
 
   const baseDomain = useMemo(
-    () => (orgSlug ? `${orgSlug}.recompry.site` : "recompry.site"),
+    () => (orgSlug ? `${orgSlug}.Vetta.site` : "Vetta.site"),
     [orgSlug]
   );
 

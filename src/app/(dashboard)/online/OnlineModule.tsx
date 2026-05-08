@@ -819,7 +819,7 @@ export default function OnlineModule({
   }, [theme]);
 
   const slugOk = isValidSlug(slug);
-  const url = slug ? `${slug}.recompry.site` : "";
+  const url = slug ? `${slug}.Vetta.site` : "";
 
   async function toggleLocationOnline(locationId: string, enable: boolean) {
     setTogglingLocationId(locationId);
@@ -901,7 +901,7 @@ export default function OnlineModule({
 
       if (error) throw error;
 
-      toast.success(`Slug actualizado a: ${slug}.recompry.site`);
+      toast.success(`Slug actualizado a: ${slug}.Vetta.site`);
     } catch (error: any) {
       console.error(error);
       toast.error(error.message || "Error al guardar la configuración");
@@ -1053,7 +1053,7 @@ export default function OnlineModule({
                       )}
                     />
                     <div className="px-4 py-3 bg-gray-100 border border-l-0 rounded-r-lg text-base text-gray-600 whitespace-nowrap">
-                      .recompry.site
+                      .Vetta.site
                     </div>
                   </div>
                   <button 

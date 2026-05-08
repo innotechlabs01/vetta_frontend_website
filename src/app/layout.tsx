@@ -11,10 +11,10 @@ const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
   title: {
-    default: "Recompry App",
-    template: "%s | Recompry",
+    default: "Vetta App",
+    template: "%s | Vetta",
   },
-  applicationName: "Recompry POS",
+  applicationName: "Vetta POS",
   description: "Engage Customers, Drive Repeat Sales.",
   manifest: "/manifest.json",
   icons: {
@@ -27,7 +27,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Recompry",
+    title: "Vetta",
   },
   other: {
     "mobile-web-app-capable": "yes",

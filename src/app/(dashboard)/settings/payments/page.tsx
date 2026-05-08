@@ -118,7 +118,7 @@ export default function PagosPage() {
         <div className="max-w-3xl mx-auto px-4 py-6 items-center  gap-3">
           <h1 className="text-xl font-semibold tracking-tight">Pagos</h1>
 <p className="text-sm mt-1">
-            Estos son los proveedores de pago habilitados por <strong>Recompry</strong> para aceptar
+            Estos son los proveedores de pago habilitados por <strong>Vetta</strong> para aceptar
             tarjetas débito y crédito, transferencias y pagos en línea en Colombia.
           </p>
         </div>
@@ -131,7 +131,7 @@ export default function PagosPage() {
         <Card className="shadow-sm">
           <CardHeader>
             <CardTitle className="flex items-center gap-1 text-base">
-              <Image src="/logo.svg" alt="Recompry" width={120} height={100} className="rounded" />
+              {/* <Image src="/logo.svg" alt="Vetta" width={120} height={100} className="rounded" /> */}
               <span className="text-gray-400 text-md">Payments</span>
             </CardTitle>
           </CardHeader>
@@ -177,7 +177,7 @@ export default function PagosPage() {
           ¿Quieres habilitar un proveedor de pago propio?
           {" "}
           <Link
-            href="https://wa.me/573172723452?text=Hola%20Recompry%2C%20quiero%20habilitar%20mi%20proveedor%20de%20pagos"
+            href="https://wa.me/573172723452?text=Hola%20Vetta%2C%20quiero%20habilitar%20mi%20proveedor%20de%20pagos"
             target="_blank"
             className="text-primary underline hover:opacity-80"
           >

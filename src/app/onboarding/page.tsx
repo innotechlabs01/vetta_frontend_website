@@ -42,7 +42,7 @@ export default function OnboardingOrganizationPage() {
   const [touchedSlug, setTouchedSlug] = useState(false);
   const [available, setAvailable] = useState<boolean | null>(null);
   const [checking, setChecking] = useState(false);
-  const domainBase = 'recompry.site';
+  const domainBase = 'Vetta.site';
 
   useEffect(() => {
     if (!touchedSlug) setSlug(slugify(name));
@@ -82,13 +82,13 @@ export default function OnboardingOrganizationPage() {
       <div className="w-full max-w-lg bg-white rounded-xl shadow p-8 space-y-6">
         <div className="flex items-center justify-center">
           <Link href="/" className="flex items-center">
-            <Image
+            {/*<Image
               src="/logo.svg"
-              alt="Recompry Logo"
+              alt="Vetta Logo"
               width={160}
               height={40}
               priority
-            />
+            />*/}
           </Link>
         </div>
 

@@ -6,7 +6,7 @@ import { Label } from "../../../components/ui/label";
 import { OtpDispatchToast } from "@/components/auth/OtpDispatchToast";
 import Image from "next/image";
 import joel from "../../../../public/joel.png"
-import logo from "../../../../public/logo.svg"
+// import logo from "../../../../public/logo.svg"
 import Link from "next/link";
 
 export default async function VerifyOtp(props: {
@@ -43,7 +43,7 @@ export default async function VerifyOtp(props: {
 
             <form className="flex flex-col w-full items-start">
 
-              {/* <Image src={logo} alt="Logo recompry" className="h-[30px] w-auto mb-5" /> */}
+              {/* <Image src={logo} alt="Logo Vetta" className="h-[30px] w-auto mb-5" /> */}
 
               <div className="flex gap-1 flex-col mb-3" >
                 <h1 className="text-2xl font-semibold">Verificar código</h1>
