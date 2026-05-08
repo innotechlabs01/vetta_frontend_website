@@ -1,6 +1,8 @@
 .env
 .env.*
 
+mcp.json
+
 
 node_modules
 
