@@ -2815,14 +2815,22 @@ export function ProductModal({
           deletedIds: deletedVariantIds,
         });
 
-        if (primaryImage) {
-          await supabase.rpc("set_primary_product_image", {
-            p_product_id: product.id,
-            p_image_id: primaryImage.id,
-          });
-        }
+         if (primaryImage) {
+           await supabase.rpc("set_primary_product_image", {
+             p_product_id: product.id,
+             p_image_id: primaryImage.id,
+           });
+         }
 
-        await syncProductCategories({
+         if (primaryImage?.url) {
+           const { error: updateImageUrlError } = await supabase
+             .from("products")
+             .update({ image_url: primaryImage.url })
+             .eq("id", product.id);
+           if (updateImageUrlError) throw updateImageUrlError;
+         }
+
+         await syncProductCategories({
           supabase,
           organizationId,
           productId: product.id,
@@ -2913,17 +2921,25 @@ export function ProductModal({
               .eq("product_id", productId)
               .eq("url", primary.url)
               .single();
-            if (primaryRow) {
-              await supabase.rpc("set_primary_product_image", {
-                p_product_id: productId,
-                p_image_id: primaryRow.id,
-              });
-            }
-          }
-        }
-      }
+             if (primaryRow) {
+               await supabase.rpc("set_primary_product_image", {
+                 p_product_id: productId,
+                 p_image_id: primaryRow.id,
+               });
+             }
+           }
+         }
+       }
 
-      if (selectedCategoryIds.length) {
+       if (primaryImage?.url) {
+         const { error: updateImageUrlError } = await supabase
+           .from("products")
+           .update({ image_url: primaryImage.url })
+           .eq("id", productId);
+         if (updateImageUrlError) throw updateImageUrlError;
+       }
+
+       if (selectedCategoryIds.length) {
         const rows = selectedCategoryIds.map((categoryId) => ({
           organization_id: organizationId,
           category_id: categoryId,
@@ -3446,8 +3462,54 @@ export function ProductModal({
                         />
                       </div>
                     </div>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
+                   </div>
+                   <div className="grid gap-3 sm:grid-cols-3">
+                     <div className="space-y-2">
+                       <Label className="text-xs">SKU</Label>
+                       <Input
+                         value={singleVariant.sku}
+                         onChange={(event) =>
+                           handleVariantFieldChange(
+                             singleVariant.id,
+                             "sku",
+                             event.target.value
+                           )
+                         }
+                         placeholder="SKU interno"
+                       />
+                     </div>
+                     <div className="space-y-2">
+                       <Label className="text-xs">Código de barras / GTIN</Label>
+                       <Input
+                         value={singleVariant.gtin}
+                         onChange={(event) =>
+                           handleVariantFieldChange(
+                             singleVariant.id,
+                             "gtin",
+                             event.target.value
+                           )
+                         }
+                         placeholder="7701234567890"
+                         inputMode="numeric"
+                       />
+                     </div>
+                     <div className="space-y-2">
+                       <Label className="text-xs">Peso envío (g)</Label>
+                       <Input
+                         value={singleVariant.weight_grams}
+                         onChange={(event) =>
+                           handleVariantFieldChange(
+                             singleVariant.id,
+                             "weight_grams",
+                             event.target.value
+                           )
+                         }
+                         placeholder="0"
+                         inputMode="decimal"
+                       />
+                     </div>
+                   </div>
+                   <div className="flex flex-wrap gap-2">
                     <Button
                       size="sm"
                       variant="outline"

@@ -1,3 +1,5 @@
+'use client';
+
 // app/app/page.tsx - Landing page en blanco
 // El dashboard real está en /home
 export default function AppHome() {
