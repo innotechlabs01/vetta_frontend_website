@@ -1,47 +1,69 @@
 # AGENTS.md
 
 ## App Context
-Next.js 14 dashboard app for Vetta (restaurant/retail management) with modules for POS, loyalty, promotions, referrals, inventory, delivery, and settings. Uses Supabase for backend, shadcn/ui + Tailwind CSS v4 for UI.
+Next.js 14 multitenant dashboard for Vetta (restaurant/retail management). Every operation depends on the active org (`org_id`) and the user's membership/role in that org. Modules: POS, loyalty, promotions, referrals, inventory, delivery, settings.
 
-## Role Definitions
-- **Orchestrator**: Gathers requirements, defines task scope, coordinates roles, ensures all necessary context (env vars, API specs, UI mocks) is collected before work starts.
-- **Developer**: Implements code changes, runs build/lint checks, fixes errors, handles Next.js/Supabase integration.
-- **UI/UX Designer**: Reviews UI changes for shadcn/Tailwind consistency, validates WCAG 2.2 accessibility, optimizes user flow and responsive design.
-- **Change Reviewer**: Validates changes align with original scope, flags unnecessary additions/scope creep. If scope drifts, asks user for clarification before proceeding.
-- **Database & Security Architect**: Defines and reviews RLS (Row Level Security) policies, designs efficient table schemas, and manages migrations. Value: Prevents data leaks and ensures scalable queries.
-- **QA & Automation Engineer**: Defines testing strategies (Unit, Integration with Playwright), verifies load/error states, and prevents regressions. Value: Reduces rework and ensures new code doesn't degrade the system.
-- **Documentation & Context Maintainer**: Maintains ADRs (Architecture Decision Records), updates API documentation, and documents the "why" behind critical decisions. Value: Facilitates team growth and reduces dependency on specific individuals.
+Stack: Next.js 14 App Router, Supabase (Auth + DB + Storage), shadcn/ui, Tailwind CSS v3, Cloudflare Workers (deploy via OpenNext).
 
-## Workflow Racional Propuesto
+## Dev Commands
+- **Dev server:** `pnpm dev` (uses `dotenv -e .env.development`, clears `.next/` via `predev`)
+- **Lint:** `pnpm lint`
+- **Build (includes typecheck):** `pnpm build`
+- **Add shadcn component:** `pnpm dlx shadcn@latest add <component-name>`
 
-To maximize the functionality, the process must follow this order:
+Always run `pnpm lint` and `pnpm build` before committing.
 
-1.  **Scope (Orchestrator):** Defines what needs to be done.
-2.  **Schema (DB Architect):** Prepares the data structure.
-3.  **Design (UI/UX):** Defines the interface and flow.
-4.  **Build (Developer):** Encodes the solution.
-5.  **Audit (Reviewer + QA):** Validates the logic and stability.
+## Key Framework Quirks
+- **Supabase client:** Use `getSupabaseBrowser()` from `@/utils/supabase/client` for client-side. **Never initialize services at module level** — causes build errors when env vars are missing. Initialize inside components (e.g., `useState(() => new Service())`).
+- **Dynamic server errors:** API routes using `request.url` or `nextUrl.searchParams` cannot be statically prerendered. Add `export const dynamic = 'force-dynamic'` to affected routes if build fails.
+- **Client components:** All `(dashboard)` pages use `"use client"`.
+- **Image optimization:** Replace `<img>` with `next/image` to avoid LCP warnings. Remote images from `nftnpvtqbtljavgtiwab.supabase.co` are pre-allowed in `next.config.mjs`.
+- **Tailwind:** v3 with `tailwindcss-animate` plugin. CSS variables for theming via `hsl(var(--...))` pattern. Dark mode via `class` strategy.
 
-## Dev Environment Tips
-- Package manager: pnpm (node_modules uses pnpm symlinks)
-- Supabase client: Use `getSupabaseBrowser()` from `@/utils/supabase/client` for client-side. **Never initialize services at module level** (causes build errors when env vars are missing).
-- shadcn/ui: Add components via `pnpm dlx shadcn@latest add <component>`, follow `components.json` config.
-- Tailwind v4: Uses `@theme inline` pattern, CSS variables for theming.
+## Deploy & Cloudflare
+Deploy target is Cloudflare Workers via OpenNext (`opennextjs-cloudflare`). No custom `worker.ts`.
 
-## Build & Verify Commands
-- Dev server: `pnpm dev`
-- Production build: `pnpm build` (must pass with no prerender errors)
-- Lint: `pnpm lint`
-- Typecheck: Included in build step, run `pnpm build` to verify
-- Add shadcn component: `pnpm dlx shadcn@latest add <component-name>`
+- **Env files:** `.env.production.secrets` (gitignored, source for all cf: commands), `.env.supabase.local` (gitignored, for Supabase CLI)
+- **Preview:** `pnpm preview` → builds + runs `wrangler dev`
+- **Deploy:** `pnpm deploy` → builds + `wrangler deploy`
+- **Check:** `pnpm check` → build + tsc + `wrangler deploy --dry-run`
+- **Secrets:** `pnpm cf:secrets:bulk` (or `pnpm cf:secrets:sync` as fallback)
+- **Typegen:** `pnpm types` → `wrangler types --env-interface CloudflareEnv env.d.ts`
+- `wrangler.json` uses `keep_vars: true` — remote bindings not in the file are preserved.
 
-## Framework Quirks
-- Next.js 14 dynamic server errors: API routes using `request.url` or `nextUrl.searchParams` cannot be statically prerendered. Add `export const dynamic = 'force-dynamic'` to affected routes if build fails.
-- Client components: All `(dashboard)` pages use `"use client"`. Initialize Supabase services inside components (e.g., `useState(() => new Service())`) not at module level.
-- Image optimization: Replace `<img>` with `next/image` to avoid LCP performance warnings.
-- Existing skill docs for Next.js, shadcn, Tailwind are in `.agents/skills/` for reference.
+Full protocol: `docs/deploy-protocol.md`
 
-## PR & Commit Instructions
+## Supabase Migrations
+Remote schema managed via Supabase CLI. Migrations in `supabase/migrations/`.
+
+- **Status:** `pnpm supabase:status`
+- **Link remote:** `pnpm supabase:link`
+- **Dry run:** `pnpm supabase:dry-run`
+- **Push:** `pnpm supabase:push`
+- **If dry-run fails** (remote has versions not in local): `pnpm supabase:pull` first to baseline, commit, then proceed.
+- **New migration:** `npx supabase migration new <name>`
+
+## Project Structure
+```
+src/
+  app/
+    (auth-pages)/     # Login, register, etc.
+    (dashboard)/      # Main app (all "use client")
+    api/              # API routes
+    auth/             # Auth callback handlers
+    onboarding/       # Onboarding flow
+    org/              # Org-related routes
+  components/         # Shared components (ui/ for shadcn)
+  constants/          # App constants
+  context/            # React context providers
+  data/               # Data layer / fetchers
+  hooks/              # Custom hooks
+  lib/                # Utilities (utils.ts for shadcn cn())
+  types/              # TypeScript types
+  utils/              # Supabase client/server/middleware helpers
+```
+
+## Commit & PR
 - Commit title format: `[front_vetta_website] <Concise title>`
-- Always run `pnpm lint` and `pnpm build` before committing.
-- Never commit env files (`.env`, `.env.local`) or build artifacts (`.next/`).
+- Never commit `.env*` files, `.next/`, or other build artifacts.
+- ESLint: `react-hooks/exhaustive-deps` is off, `no-img-element` is warn only.

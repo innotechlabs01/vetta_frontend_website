@@ -11,6 +11,9 @@ import crypto from "crypto";
 import { encodedRedirect } from "@/utils/utils";
 import { z } from "zod";
 
+const BYPASS_PHONES = ['573128386640', '573116638572', '573008408917'];
+const BYPASS_CODE = '123456';
+
 // Función para crear JWT manual compatible con Supabase
 function createManualJWT(userId: string, email: string, jwtSecret: string, issuer: string, expiresIn: string): string {
   const header = {
@@ -165,11 +168,9 @@ export const signInAction = async (formData: FormData) => {
   // Formato E.164 esperado por Twilio
   const fullPhoneNumber = `${normalizedCountryCode}${normalizedPhoneNumber}`;
 
-  // BYPASS: Omitir envío de OTP para números específicos
-  const BYPASS_PHONE = '573116638572';
+  // BYPASS: Omitir envío de SMS para números de prueba
   const fullPhoneWithoutPlus = fullPhoneNumber.startsWith('+') ? fullPhoneNumber.substring(1) : fullPhoneNumber;
-  
-  if (fullPhoneNumber === BYPASS_PHONE || fullPhoneWithoutPlus === BYPASS_PHONE) {
+  if (BYPASS_PHONES.includes(fullPhoneWithoutPlus)) {
     console.log("[bypass] Skipping OTP send for special phone:", fullPhoneNumber);
     const phoneForRedirect = encodeURIComponent(fullPhoneNumber);
     return redirect(`/verify-otp?phone=${phoneForRedirect}&status=otp_sent`);
@@ -351,106 +352,59 @@ export async function verifySmsOtpAction(formData: FormData): Promise<any> {
     ? normalizedPhone 
     : `+${normalizedPhone.replace(/\D/g, "")}`;
 
-  // BYPASS: Omitir verificación para números específicos
-  const BYPASS_PHONE = '573116638572';
-  const BYPASS_CODE = '123456';
+  // BYPASS: Código fijo para números de prueba
+  const fullPhoneWithoutPlus = fullPhoneNumber.startsWith('+') ? fullPhoneNumber.substring(1) : fullPhoneNumber;
+  if (BYPASS_PHONES.includes(fullPhoneWithoutPlus)) {
+    if (token !== BYPASS_CODE) {
+      return redirect(
+        `/verify-otp?phone=${encodeURIComponent(phone)}&type=error&message=${encodeURIComponent("Código inválido")}`
+      );
+    }
+    console.log("[bypass] Bypass OTP success for phone:", fullPhoneNumber);
+    const admin = getSupabaseAdmin();
+    const userId = await findUserIdByPhone(admin, fullPhoneNumber);
+    if (!userId) {
+      return redirect(
+        `/verify-otp?phone=${encodeURIComponent(phone)}&type=error&message=${encodeURIComponent("Usuario no encontrado")}`
+      );
+    }
+    const { data: userOrgs } = await admin
+      .from("organization_members")
+      .select("organization_id")
+      .eq("user_id", userId)
+      .limit(2);
+    const orgId = userOrgs && userOrgs.length > 0 ? userOrgs[0].organization_id : null;
+    const nextPath = "/home";
 
-  const fullPhoneWithoutPlusBypass = fullPhoneNumber.startsWith('+') ? fullPhoneNumber.substring(1) : fullPhoneNumber;
-  
-  if ((fullPhoneNumber === BYPASS_PHONE || fullPhoneWithoutPlusBypass === BYPASS_PHONE) && token === BYPASS_CODE) {
-    console.log("[bypass] Special bypass for phone:", fullPhoneNumber);
-    
-    try {
-      const admin = getSupabaseAdmin();
-      const tempEmail = `user_${Date.now()}@vetta.app`;
-      
-      const { data: newUser, error: createError } = await admin.auth.admin.createUser({
-        phone: fullPhoneNumber,
-        email: tempEmail,
-        user_metadata: {
-          phone: fullPhoneNumber,
-        },
-        email_confirm: true,
-        phone_confirm: true,
-      });
-      
-      let userId: string;
-       
-      if (createError) {
-        const foundUserId = await findUserIdByPhone(admin, fullPhoneNumber);
-        if (!foundUserId) {
-          return redirect("/login?type=error&message=Usuario no encontrado");
-        }
-        userId = foundUserId;
-      } else if (newUser?.user) {
-        userId = newUser.user.id;
-      } else {
-        return redirect("/login?type=error&message=Error al crear usuario");
-      }
-       
-      console.log("[bypass] Checking org count for user:", userId);
-      
-      // Get user role in the organization from organization_members table
-      const { data: memberData } = await supabase
-        .from("organization_members")
-        .select("role, organization_id")
-        .eq("user_id", userId)
-        .limit(2);
-      
-       const userRole = memberData && memberData.length > 0 ? memberData[0].role : null;
-       const orgId = memberData && memberData.length > 0 ? memberData[0].organization_id : null;
-       const isOwnerOrAdmin = userRole === 'owner' || userRole === 'admin';
-       
-       const nextPath = isOwnerOrAdmin ? "/home" : "/home";
-       console.log("[bypass] Establishing session for user:", userId, "org:", orgId, "next:", nextPath);
-       
-       // Obtener email del usuario para generateLink
-       const { data: userData, error: userError } = await admin.auth.admin.getUserById(userId);
-       if (userError || !userData?.user?.email) {
-         console.error("[bypass] Failed to get user email:", userError);
-         return redirect("/login?type=error&message=Error en bypass");
-       }
-       const userEmail = userData.user.email;
-       console.log("[bypass] User email:", userEmail);
-       
-       // Generate magic link + verify OTP - establece sesión
-       const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
-         type: 'magiclink',
-         email: userEmail,
-       });
-       
-       if (linkError || !linkData?.properties?.hashed_token) {
-         console.error("[bypass] Failed to generate link:", linkError);
-         return redirect("/login?type=error&message=Error en bypass");
-       }
-       
-       console.log("[bypass] Link generated, verifying OTP...");
-       
-       const { error: verifyError } = await supabase.auth.verifyOtp({
-         token_hash: linkData.properties.hashed_token,
-         type: 'magiclink',
-       });
-       
-       if (verifyError) {
-         console.error("[bypass] Verify OTP error:", verifyError);
-         return redirect("/login?type=error&message=Error en bypass");
-       }
-       
-       console.log("[bypass] Session established successfully!");
-       
-       // Redirect normal - usa redirect() de Next.js que preserva cookies
-       if (orgId) {
-         console.log("[bypass] Redirecting to /api/org/select?org=" + orgId + "&next=" + nextPath);
-         return redirect(`/api/org/select?org=${orgId}&next=${nextPath}`);
-       }
-       
-       return redirect("/org/select");
-        
-     } catch (err) {
-       console.error("[bypass] Error:", err);
-       return redirect("/login?type=error&message=Error en bypass");
-     }
-   }
+    // Establecer sesión directamente en la Server Action (cookies se propagan correctamente aquí)
+    const { data: userData, error: userError } = await admin.auth.admin.getUserById(userId);
+    if (userError || !userData?.user?.email) {
+      console.error("[bypass] Failed to get user email:", userError);
+      return redirect("/login?type=error&message=Error%20en%20bypass");
+    }
+    const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
+      type: 'magiclink',
+      email: userData.user.email,
+    });
+    if (linkError || !linkData?.properties?.hashed_token) {
+      console.error("[bypass] Failed to generate link:", linkError);
+      return redirect("/login?type=error&message=Error%20en%20bypass");
+    }
+    const { error: verifyError } = await supabase.auth.verifyOtp({
+      token_hash: linkData.properties.hashed_token,
+      type: 'magiclink',
+    });
+    if (verifyError) {
+      console.error("[bypass] Verify error:", verifyError);
+      return redirect("/login?type=error&message=Error%20en%20bypass");
+    }
+    console.log("[bypass] Session established for user:", userId);
+
+    if (orgId) {
+      return redirect(`/api/org/select?org=${orgId}&next=${encodeURIComponent(nextPath)}`);
+    }
+    return redirect("/org/select");
+  }
 
   // Flujo normal: Verificar OTP usando Supabase nativo
   const { data, error } = await supabase.auth.verifyOtp({
@@ -628,23 +582,90 @@ export async function resendOtpAction(formData: FormData): Promise<any> {
   return await sendOtpAction(formData);
 }
 
+const VALID_CATEGORIES = [
+  'restaurant', 'coffee_shop', 'fast_food', 'bar',
+  'store', 'supermarket', 'boutique', 'electronics',
+  'hardware', 'beauty', 'convenience', 'pharmacy',
+  'clinic', 'gym', 'online_store', 'currency_exchange',
+  'other',
+];
+
 export async function createOrgAction(formData: FormData) {
   const supabase = await createClient();
 
   const name = String(formData.get('name') || 'Mi negocio');
   const slug = String(formData.get('slug') || '');
-  const business_category = String(formData.get('business_category') || 'store');
+  let business_category = String(formData.get('business_category') || 'store');
+
+  if (!VALID_CATEGORIES.includes(business_category)) {
+    business_category = 'store';
+  }
+
+  let latitude = formData.get('latitude') ? parseFloat(String(formData.get('latitude'))) : null;
+  let longitude = formData.get('longitude') ? parseFloat(String(formData.get('longitude'))) : null;
+
+  const { data: { user } } = await supabase.auth.getUser();
 
   const { data, error } = await supabase.rpc('create_default_org', {
     p_org_name: name,
     p_slug: slug,
     p_business_category: business_category,
+    p_created_by: user?.id ?? null,
   });
   if (error) {
+    console.error('[onboarding] create_default_org error:', error);
     throw new Error(error.message);
   }
 
   const orgId = data as string;
+
+  // Agregar al creador como owner de la organización
+  // Usamos upsert con ignoreDuplicates por si el RPC ya creó la membresía
+  console.log('[onboarding] user from session:', !!user, user?.id);
+  if (user) {
+    const admin = getSupabaseAdmin();
+    const { data: existing } = await admin
+      .from("organization_members")
+      .select("id")
+      .eq("organization_id", orgId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (!existing) {
+      const { error: insertError } = await admin
+        .from("organization_members")
+        .insert({ organization_id: orgId, user_id: user.id, role: "owner" });
+      if (insertError) {
+        console.error("[onboarding] insert membership error:", insertError);
+      }
+    }
+  } else {
+    console.error('[onboarding] No user session found - cannot create membership');
+  }
+
+  // Si no hay coordenadas del browser, buscar de otra organización del usuario
+  if ((latitude === null || longitude === null) && user) {
+    const { data: existingOrgs } = await supabase
+      .from("organization_members")
+      .select("organization_id")
+      .eq("user_id", user.id);
+    const otherOrgIds = (existingOrgs ?? [])
+      .map(o => o.organization_id)
+      .filter(id => id !== orgId);
+    if (otherOrgIds.length > 0) {
+      const { data: existingLoc } = await supabase
+        .from("locations")
+        .select("latitude, longitude")
+        .in("organization_id", otherOrgIds)
+        .not("latitude", "is", null)
+        .not("longitude", "is", null)
+        .limit(1);
+      if (existingLoc?.[0]) {
+        latitude = existingLoc[0].latitude;
+        longitude = existingLoc[0].longitude;
+      }
+    }
+  }
 
   const defaultChannels = getDefaultChannelsByCategory(business_category);
 
@@ -653,6 +674,8 @@ export async function createOrgAction(formData: FormData) {
     .insert({
       organization_id: orgId,
       name: 'Principal',
+      latitude: latitude ?? 0,
+      longitude: longitude ?? 0,
       is_active: true,
       is_online_store: defaultChannels.is_online_store,
       pickup_enabled: defaultChannels.pickup_enabled,
@@ -663,6 +686,29 @@ export async function createOrgAction(formData: FormData) {
 
   if (locError) {
     console.error('Error creating default location:', locError);
+    // Rollback: eliminar organización huérfana para evitar slugs bloqueados
+    await supabase.from('organizations').delete().eq('id', orgId);
+    throw new Error('Error al crear la sucursal principal. Intenta de nuevo.');
+  }
+
+  // Precargar categorías por defecto según el tipo de negocio
+  if (user) {
+    const defaultCategories = getDefaultCategoriesByBusiness(business_category);
+    if (defaultCategories.length > 0) {
+      const admin = getSupabaseAdmin();
+      const categoriesToInsert = defaultCategories.map((name, idx) => ({
+        organization_id: orgId,
+        name,
+        sort_order: (idx + 1) * 10,
+        is_active: true,
+      }));
+      const { error: catError } = await admin
+        .from("product_categories")
+        .insert(categoriesToInsert);
+      if (catError) {
+        console.error("[onboarding] Error seeding default categories:", catError);
+      }
+    }
   }
 
   const c = cookies();
@@ -783,6 +829,52 @@ function getDefaultChannelsByCategory(category: string) {
   };
 
   return channels[category] || channels.other;
+}
+
+function getDefaultCategoriesByBusiness(category: string): string[] {
+  const presets: Record<string, string[]> = {
+    pharmacy: [
+      "Medicamentos", "Vitaminas y Suplementos", "Cuidado Personal",
+      "Primeros Auxilios", "Higiene", "Bebés y Mamás",
+    ],
+    restaurant: [
+      "Entradas", "Platos Fuertes", "Bebidas", "Postres", "Menú del Día",
+    ],
+    coffee_shop: [
+      "Café", "Té", "Repostería", "Bebidas Frías", "Snacks",
+    ],
+    fast_food: [
+      "Hamburguesas", "Papas Fritas", "Bebidas", "Combos", "Postres",
+    ],
+    bar: [
+      "Destilados", "Cervezas", "Vinos", "Cócteles", "Snacks",
+    ],
+    supermarket: [
+      "Frutas y Verduras", "Lácteos", "Carnes", "Bebidas",
+      "Abarrotes", "Aseo", "Panadería",
+    ],
+    boutique: [
+      "Ropa", "Accesorios", "Calzado", "Nuevos Ingresos", "Ofertas",
+    ],
+    electronics: [
+      "Celulares", "Computadores", "Accesorios", "Audio",
+      "Electrodomésticos", "Videojuegos",
+    ],
+    hardware: [
+      "Herramientas", "Pintura", "Ferretería", "Electricidad",
+      "Plomería", "Jardín",
+    ],
+    beauty: [
+      "Cabello", "Uñas", "Maquillaje", "Skincare", "Perfumes",
+    ],
+    convenience: [
+      "Snacks", "Bebidas", "Cigarrillos", "Papelería", "Aseo",
+    ],
+    clinic: [
+      "Consulta General", "Procedimientos", "Medicamentos", "Insumos",
+    ],
+  };
+  return presets[category] ?? [];
 }
 
 export async function setOrgAction(formData: FormData) {

@@ -1,6 +1,7 @@
 // app/(dashboard)/catalog/categories/page.tsx
 "use client";
 
+import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getSupabaseBrowser } from "@/utils/supabase/client";
 import { useEnvironment } from "@/context/EnvironmentContext";
@@ -322,10 +323,12 @@ function CategoryModal({ open, onClose, onSaved, organizationId, category }: {
               </Button>
               {imageUrl ? (
                 <div className="relative w-20 h-20 rounded-xl overflow-hidden bg-muted">
-                  <img
+                  <Image
                     src={imageUrl}
                     alt="category"
-                    className="object-cover w-full h-full"
+                    fill
+                    sizes="80px"
+                    className="object-cover"
                   />
                 </div>
               ) : (
@@ -382,12 +385,14 @@ function CategoryModal({ open, onClose, onSaved, organizationId, category }: {
                     className="flex items-center justify-between px-3 py-2 text-sm hover:bg-muted/50 cursor-pointer"
                   >
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-md overflow-hidden bg-muted">
+                      <div className="relative w-8 h-8 rounded-md overflow-hidden bg-muted">
                         {p.image_url ? (
-                          <img
+                          <Image
                             src={p.image_url}
-                            className="w-full h-full object-cover"
                             alt={p.name}
+                            fill
+                            sizes="32px"
+                            className="object-cover"
                           />
                         ) : null}
                       </div>
@@ -901,7 +906,7 @@ export default function CategoriesPage() {
                           <TableCell>
                             <div className="relative w-[52px] h-[52px] rounded-xl overflow-hidden bg-muted flex items-center justify-center">
                               {c.image_url ? (
-                                <img src={c.image_url} alt={c.name} className="object-cover w-full h-full" />
+                                <Image src={c.image_url} alt={c.name} fill sizes="52px" className="object-cover" />
                               ) : (
                                 <span className="text-xs text-muted-foreground">N/A</span>
                               )}

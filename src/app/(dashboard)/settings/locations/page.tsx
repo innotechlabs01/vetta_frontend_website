@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getSupabaseBrowser } from "@/utils/supabase/client";
 import { useEnvironment } from "@/context/EnvironmentContext";
@@ -1475,11 +1476,12 @@ function LocationModal({ open, onClose, onSaved, location, organizationId, place
                       onChange={handleImageUpload}
                     />
                     {imageUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
+                      <Image
                         src={imageUrl}
                         alt="location"
-                        className="object-cover w-full h-full transition-transform duration-300 group-hover:scale-105"
+                        fill
+                        sizes="(max-width: 768px) 100vw, 400px"
+                        className="object-cover transition-transform duration-300 group-hover:scale-105"
                       />
                     ) : (
                       <div className="flex min-h-[220px] items-center justify-center w-full h-full text-sm text-muted-foreground">
@@ -2344,8 +2346,7 @@ export default function LocationsPage() {
                 <TableCell>
                   {l.image_url ? (
                     <div className="relative w-[48px] h-[48px] rounded-lg overflow-hidden bg-muted">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={l.image_url} alt={l.name} className="object-cover w-full h-full" />
+                      <Image src={l.image_url} alt={l.name} fill sizes="48px" className="object-cover" />
                     </div>
                   ) : (
                     <div className="w-[48px] h-[48px] rounded-lg bg-muted flex items-center justify-center text-[10px] text-muted-foreground">N/A</div>

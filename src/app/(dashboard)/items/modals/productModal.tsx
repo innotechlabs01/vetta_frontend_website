@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import {
@@ -3447,11 +3448,12 @@ export function ProductModal({
                             image.is_primary ? "ring-2 ring-primary" : ""
                           }`}
                         >
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
+                          <Image
                             src={image.url}
                             alt="product"
-                            className="h-32 w-full object-cover"
+                            fill
+                            sizes="(max-width: 768px) 100vw, 300px"
+                            className="object-cover"
                           />
                           <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-black/45 px-2 py-1 text-xs text-white">
                             <button

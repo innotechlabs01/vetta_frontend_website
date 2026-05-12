@@ -681,7 +681,7 @@ export default function LoyaltyModule({
                   <div>
                     <div className="flex items-center gap-3 min-w-0">
                       {reward.image_url && (
-                        <img
+                        <Image
                           src={reward.image_url}
                           alt={reward.name}
                           width={32}
@@ -736,7 +736,7 @@ export default function LoyaltyModule({
                         {getProductName(reward.product_id)}
                         {products.find((p) => p.id === reward.product_id)
                           ?.image_url && (
-                          <img
+                          <Image
                             src={
                               products.find((p) => p.id === reward.product_id)
                                 ?.image_url!
@@ -954,7 +954,7 @@ export default function LoyaltyModule({
                               className="w-44 h-44 bg-gray-50 rounded-lg flex items-center justify-center border border-dashed border-gray-300 cursor-pointer hover:bg-gray-100 transition"
                             >
                               {formData.image_preview ? (
-                                <img
+                                <Image
                                   src={formData.image_preview}
                                   alt="Preview"
                                   width={176}
@@ -1332,9 +1332,11 @@ export default function LoyaltyModule({
                                             className="flex items-center gap-2 bg-blue-50 px-3 py-1.5 rounded-full border border-blue-200"
                                           >
                                             {product.image_url && (
-                                              <img
+                                              <Image
                                                 src={product.image_url}
                                                 alt={product.name}
+                                                width={20}
+                                                height={20}
                                                 className="w-5 h-5 rounded-full object-cover"
                                               />
                                             )}
@@ -1591,9 +1593,11 @@ export default function LoyaltyModule({
                                                   className="flex items-center gap-2 bg-green-50 px-3 py-1.5 rounded-full border border-green-200"
                                                 >
                                                   {product.image_url && (
-                                                    <img
+                                                    <Image
                                                       src={product.image_url}
                                                       alt={product.name}
+                                                      width={20}
+                                                      height={20}
                                                       className="w-5 h-5 rounded-full object-cover"
                                                     />
                                                   )}
@@ -1835,12 +1839,14 @@ export default function LoyaltyModule({
                           {/* Imagen y nombre */}
                           {formData.name && (
                             <div className="flex flex-col items-center gap-2">
-                              <div className="w-32 h-32 bg-gray-200 rounded-lg overflow-hidden">
+                              <div className="relative w-32 h-32 bg-gray-200 rounded-lg overflow-hidden">
                                 {formData.image_preview ? (
-                                  <img
+                                  <Image
                                     src={formData.image_preview}
                                     alt="Preview"
-                                    className="w-full h-full object-cover"
+                                    fill
+                                    sizes="128px"
+                                    className="object-cover"
                                   />
                                 ) : (
                                   <div className="w-full h-full flex items-center justify-center text-gray-400">
@@ -2030,11 +2036,15 @@ export default function LoyaltyModule({
                                             className="flex items-center gap-3 bg-white p-3 rounded-lg border border-green-200 hover:border-green-300 transition-colors"
                                           >
                                             {product.image_url ? (
-                                              <img
-                                                src={product.image_url}
-                                                alt={product.name}
-                                                className="w-12 h-12 rounded-lg object-cover border border-gray-200"
-                                              />
+                                              <div className="relative w-12 h-12 rounded-lg overflow-hidden border border-gray-200">
+                                                <Image
+                                                  src={product.image_url}
+                                                  alt={product.name}
+                                                  fill
+                                                  sizes="48px"
+                                                  className="object-cover"
+                                                />
+                                              </div>
                                             ) : (
                                               <div className="w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center">
                                                 <Gift className="w-6 h-6 text-gray-400" />
@@ -2087,9 +2097,11 @@ export default function LoyaltyModule({
                                         className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-full border border-gray-300"
                                       >
                                         {product.image_url && (
-                                          <img
+                                          <Image
                                             src={product.image_url}
                                             alt={product.name}
+                                            width={24}
+                                            height={24}
                                             className="w-6 h-6 rounded-full object-cover"
                                           />
                                         )}

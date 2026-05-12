@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { Product } from "../types";
 import { Button } from "@/components/ui/button";
 import {
@@ -28,10 +29,12 @@ function ProductRow({ product, onEdit }: { product: Product; onEdit: (p: Product
       <TableCell>
         {product.image_url ? (
           <div className="relative w-12 h-12 rounded-lg overflow-hidden bg-muted">
-            <img
+            <Image
               src={product.image_url}
               alt={product.name}
-              className="object-cover w-full h-full"
+              fill
+              sizes="48px"
+              className="object-cover"
             />
           </div>
         ) : (

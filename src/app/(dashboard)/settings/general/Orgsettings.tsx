@@ -575,7 +575,6 @@ function UploadTile({
         }}
       >
         {preview ? (
-          // eslint-disable-next-line @next/next/no-img-element
           <Image src={preview} width={700} height={200} alt={label} className="w-full h-full object-contain" />
         ) : (
           <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-500">

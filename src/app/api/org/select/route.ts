@@ -1,6 +1,5 @@
-// app/api/org/select/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/utils/supabase/server";
+import { createServerClient } from "@supabase/ssr";
 import { getSupabaseAdmin } from "@/utils/supabase/admin";
 
 const DEFAULT_NEXT = "/home";
@@ -10,18 +9,16 @@ function normalizeNext(next: string | null): string {
   return next;
 }
 
-async function hasMembership(orgId: string): Promise<boolean> {
-  const supabase = await createClient();
+async function hasMembership(orgId: string, supabase: any): Promise<boolean> {
   const {
     data: { user },
     error: userError,
   } = await supabase.auth.getUser();
-  
+
   if (userError || !user?.id) {
     return false;
   }
 
-  // Check if user has membership in this org (use admin to bypass RLS)
   const { data: membership, error: memberError } = await getSupabaseAdmin()
     .from("organization_members")
     .select("id")
@@ -37,10 +34,34 @@ async function hasMembership(orgId: string): Promise<boolean> {
   return Boolean(membership?.length);
 }
 
+function createSupabaseWithCookies(req: NextRequest) {
+  const supabaseCookies: { name: string; value: string; options: any }[] = [];
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll: () => req.cookies.getAll(),
+        setAll: (cookies: any) => {
+          supabaseCookies.push(...cookies);
+        },
+      },
+    }
+  );
+  return { supabase, supabaseCookies };
+}
+
+function applyCookies(response: NextResponse, supabaseCookies: { name: string; value: string; options: any }[]) {
+  for (const { name, value, options } of supabaseCookies) {
+    response.cookies.set(name, value, options);
+  }
+  return response;
+}
+
 function applyOrgCookie(response: NextResponse, orgId: string) {
   response.cookies.set("org_id", orgId, {
     path: "/",
-    httpOnly: true, // SECURITY FIX: Prevent XSS access to org_id cookie (IDOR vulnerability)
+    httpOnly: true,
     sameSite: "strict",
     secure: process.env.NODE_ENV === "production",
   });
@@ -52,25 +73,24 @@ export async function GET(req: NextRequest) {
   const orgId = url.searchParams.get("org");
   const next = normalizeNext(url.searchParams.get("next"));
 
-  console.log("orgId anthony", orgId);
-  console.log("next", next);
-
-
   if (!orgId) {
     url.pathname = "/org/select";
     url.searchParams.delete("org");
     return NextResponse.redirect(url);
   }
 
-  const validMembership = await hasMembership(orgId);
+  const { supabase, supabaseCookies } = createSupabaseWithCookies(req);
+
+  const validMembership = await hasMembership(orgId, supabase);
   if (!validMembership) {
     url.pathname = "/org/select";
     url.searchParams.set("error", "forbidden");
-    return NextResponse.redirect(url);
+    return applyCookies(NextResponse.redirect(url), supabaseCookies);
   }
 
   const response = NextResponse.redirect(new URL(next, req.url));
-  return applyOrgCookie(response, orgId);
+  applyOrgCookie(response, orgId);
+  return applyCookies(response, supabaseCookies);
 }
 
 export async function POST(req: NextRequest) {
@@ -82,11 +102,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "org is required" }, { status: 400 });
   }
 
-  const validMembership = await hasMembership(orgId);
+  const { supabase, supabaseCookies } = createSupabaseWithCookies(req);
+
+  const validMembership = await hasMembership(orgId, supabase);
   if (!validMembership) {
     return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
   }
 
   const response = NextResponse.json({ ok: true, next });
-  return applyOrgCookie(response, orgId);
+  applyOrgCookie(response, orgId);
+  return applyCookies(response, supabaseCookies);
 }

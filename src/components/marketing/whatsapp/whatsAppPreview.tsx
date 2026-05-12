@@ -248,7 +248,7 @@ export const WhatsAppPreview: React.FC<WhatsAppPreviewProps> = ({
             <div className="flex flex-col py-[2px] px-[4px] items-start gap-[3px] w-full">
               <div className="w-full px-[4px] min-w-0">
                 <p
-                  className="clamp-2 break-words w-full text-[#333] font-inter text-[11px] font-bold leading-[14px]"
+                  className="line-clamp-2 break-words w-full text-[#333] font-inter text-[11px] font-bold leading-[14px]"
                   title={displayTitle}
                 >
                   {displayTitle}

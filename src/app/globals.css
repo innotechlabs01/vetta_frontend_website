@@ -213,9 +213,3 @@ body {
 }
 
 
-.clamp-5{
-  display: -webkit-box;
-  -webkit-line-clamp: 5;      /* número de líneas */
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}

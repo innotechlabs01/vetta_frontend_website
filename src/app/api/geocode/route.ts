@@ -95,7 +95,9 @@ export async function GET(req: NextRequest) {
   }
 
   const results = await searchAddresses(q);
-  return NextResponse.json(results);
+  return NextResponse.json(results, {
+    headers: { "Cache-Control": "public, max-age=600, s-maxage=600" },
+  });
 }
 
 async function searchAddresses(query: string): Promise<AddressSuggestion[]> {

@@ -6,7 +6,6 @@ import { slugify } from '@/lib/slugify';
 import { createClient } from '@/utils/supabase/client';
 import { createOrgAction, signOutAction } from '../actions';
 import Link from 'next/link';
-import Image from 'next/image';
 import { cn } from '@/lib/utils';
 
 type BusinessCategory = {
@@ -42,6 +41,7 @@ export default function OnboardingOrganizationPage() {
   const [touchedSlug, setTouchedSlug] = useState(false);
   const [available, setAvailable] = useState<boolean | null>(null);
   const [checking, setChecking] = useState(false);
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const domainBase = 'Vetta.site';
 
   useEffect(() => {
@@ -59,14 +59,14 @@ export default function OnboardingOrganizationPage() {
     return () => clearTimeout(handle);
   }, [slug, supabase]);
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (available === false || checking) return;
-    
-    const formData = new FormData(e.currentTarget);
-    formData.set('business_category', businessCategory);
-    await createOrgAction(formData);
-  };
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => {},
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 600000 }
+    );
+  }, []);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100 px-4 relative">
@@ -97,7 +97,16 @@ export default function OnboardingOrganizationPage() {
           <p className="text-gray-600 text-sm">Este será el espacio para tu tienda y equipo.</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-5">
+        <form
+          action={createOrgAction}
+          onSubmit={(e) => {
+            if (available === false || checking) e.preventDefault();
+          }}
+          className="space-y-5"
+        >
+          <input type="hidden" name="latitude" value={coords?.lat ?? ''} />
+          <input type="hidden" name="longitude" value={coords?.lng ?? ''} />
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               ¿Qué tipo de negocio tienes?

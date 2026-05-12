@@ -45,7 +45,9 @@ export async function GET(req: NextRequest) {
     return handleReverseGeocode(req, lat, lng);
   }
 
-  if (!q) return NextResponse.json([]);
+  if (!q) return NextResponse.json([], {
+    headers: { "Cache-Control": "public, max-age=600, s-maxage=600" },
+  });
 
   const apiKey =
     process.env.GOOGLE_PLACES_API_KEY_SECRET ||
@@ -116,7 +118,9 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  return NextResponse.json(results);
+  return NextResponse.json(results, {
+    headers: { "Cache-Control": "public, max-age=600, s-maxage=600" },
+  });
 }
 
 async function handleReverseGeocode(req: NextRequest, lat: string, lng: string) {

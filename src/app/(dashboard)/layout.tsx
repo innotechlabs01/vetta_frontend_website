@@ -1,7 +1,12 @@
 // app/(dashboard)/layout.tsx  (SERVER COMPONENT)
+import type { Metadata } from "next"
 import { getEnvironment } from "@/lib/get-env";
 import { EnvironmentProvider } from "@/context/EnvironmentContext";
 import { redirect } from "next/navigation";
+
+export const metadata: Metadata = {
+  title: "Panel de control",
+};
 import Sidebar from "@/components/sidebar";
 import OrgSync from "@/components/OrgSync";
 

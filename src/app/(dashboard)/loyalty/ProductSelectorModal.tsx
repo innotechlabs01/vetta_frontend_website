@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState, useEffect } from "react";
 import { X, Search } from "lucide-react";
 
@@ -189,11 +190,15 @@ export default function ProductSelectorModal({
 
                     {/* Image */}
                     {product.image_url ? (
-                      <img
-                        src={product.image_url}
-                        alt={product.name}
-                        className="w-16 h-16 rounded-lg object-cover flex-shrink-0"
-                      />
+                      <div className="relative w-16 h-16 rounded-lg overflow-hidden flex-shrink-0">
+                        <Image
+                          src={product.image_url}
+                          alt={product.name}
+                          fill
+                          sizes="64px"
+                          className="object-cover"
+                        />
+                      </div>
                     ) : (
                       <div className="w-16 h-16 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
                         <span className="text-gray-400 text-xs">Sin foto</span>

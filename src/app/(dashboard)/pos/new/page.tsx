@@ -1,6 +1,7 @@
 // app/ventas/nueva/page.tsx
 "use client";
 
+import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useEnvironment } from "@/context/EnvironmentContext";
@@ -1284,14 +1285,16 @@ function ModifierSelectionDialog({
                           >
                             <div className="flex items-center gap-3">
                               <div
-                                className={`h-10 w-10 shrink-0 rounded-full border overflow-hidden ${modifier.image_url ? "bg-white" : "bg-gray-100"
+                                className={`relative h-10 w-10 shrink-0 rounded-full border overflow-hidden ${modifier.image_url ? "bg-white" : "bg-gray-100"
                                   }`}
                               >
                                 {modifier.image_url ? (
-                                  <img
+                                  <Image
                                     src={modifier.image_url}
                                     alt={modifier.display_name ?? modifier.name}
-                                    className="h-full w-full object-cover"
+                                    fill
+                                    sizes="40px"
+                                    className="object-cover"
                                   />
                                 ) : (
                                   <div className="grid h-full w-full place-items-center text-xs font-semibold text-gray-500">
@@ -5229,8 +5232,8 @@ export default function NuevaVentaPage() {
                         onClick={() => scrollToCategory(c.id)}
                         className={`flex items-center gap-2 rounded-full pl-2 pr-3 py-2 text-sm shrink-0 ${active ? "bg-blue-100 hover:bg-blue-200" : "hover:bg-gray-200 bg-gray-100"}`}
                       >
-                        <div className="w-6 h-6 rounded-full overflow-hidden bg-gray-200">
-                          {c.image_url ? <img src={c.image_url} alt={c.name} className="w-full h-full object-cover" /> : null}
+                        <div className="relative w-6 h-6 rounded-full overflow-hidden bg-gray-200">
+                          {c.image_url ? <Image src={c.image_url} alt={c.name} fill sizes="24px" className="object-cover" /> : null}
                         </div>
                         <span className="whitespace-nowrap">{c.name}</span>
                       </button>
@@ -5287,11 +5290,11 @@ export default function NuevaVentaPage() {
                         onClick={() => addToCartByItem(p)}
                         className="text-sm rounded-xl text-left hover:bg-gray-100"
                       >
-                        <div className="mb-2 aspect-square w-full max-w-full hover:outline-2 hover:outline-blue-600 rounded-xl border bg-white overflow-hidden flex items-center justify-center">
+                        <div className="relative mb-2 aspect-square w-full max-w-full hover:outline-2 hover:outline-blue-600 rounded-xl border bg-white overflow-hidden flex items-center justify-center">
                           {p.image_url ? (
-                            <img src={p.image_url} alt={p.name} className="h-full w-full object-contain" />
+                            <Image src={p.image_url} alt={p.name} fill sizes="(max-width: 768px) 50vw, 200px" className="object-contain" />
                           ) :
-                            <img src="/defaults/products/eat.png" alt={p.name} className="h-full w-full object-contain" />
+                            <Image src="/defaults/products/eat.png" alt={p.name} fill sizes="(max-width: 768px) 50vw, 200px" className="object-contain" />
                           }
                         </div>
                         <div className="font-semibold leading-tight text-[16px]" title={p.name}>
@@ -5337,9 +5340,9 @@ export default function NuevaVentaPage() {
                       onClick={() => addToCartByItem(p)}
                       className="rounded-2xl border p-3 text-left hover:bg-gray-100"
                     >
-                      <div className="mb-2 aspect-square w-full rounded-xl bg-gray-100 overflow-hidden flex items-center justify-center">
+                      <div className="relative mb-2 aspect-square w-full rounded-xl bg-gray-100 overflow-hidden flex items-center justify-center">
                         {p.image_url ? (
-                          <img src={p.image_url} alt={p.name} className="h-full w-full object-contain" />
+                          <Image src={p.image_url} alt={p.name} fill sizes="(max-width: 768px) 50vw, 200px" className="object-contain" />
                         ) : null}
                       </div>
                       <div className="font-medium leading-tight truncate" title={p.name}>{p.name}</div>

@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getSupabaseBrowser } from "@/utils/supabase/client";
 import { useEnvironment } from "@/context/EnvironmentContext";
@@ -452,11 +453,12 @@ export default function ProductsPage() {
                 <TableCell>
                   {product.image_url ? (
                     <div className="relative w-[52px] h-[52px] rounded-xl overflow-hidden bg-muted">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
+                      <Image
                         src={product.image_url}
                         alt={product.name}
-                        className="object-cover w-full h-full"
+                        fill
+                        sizes="52px"
+                        className="object-cover"
                       />
                     </div>
                   ) : (
