@@ -1181,6 +1181,43 @@ export function ProductModal({
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
   const [openCatDlg, setOpenCatDlg] = useState(false);
 
+  const [currentStep, setCurrentStep] = useState(0);
+  const steps = [
+    { name: "General", fields: ["name", "itemType"] },
+    { name: "Imágenes", fields: [] },
+    { name: "Variantes", fields: ["name"] },
+    { name: "Categoría", fields: [] },
+    { name: "Impuestos", fields: [] },
+    { name: "Disponibilidad", fields: [] },
+  ];
+
+  const canProceedToStep = (stepIndex: number) => {
+    if (stepIndex <= currentStep) return true;
+    if (stepIndex === 1) return name.trim().length > 0;
+    if (stepIndex === 2) return name.trim().length > 0 && itemType;
+    return true;
+  };
+
+  const goToStep = (stepIndex: number) => {
+    if (canProceedToStep(stepIndex)) {
+      setCurrentStep(stepIndex);
+    } else {
+      toast.error("Completa los campos requeridos en el paso actual");
+    }
+  };
+
+  const handleNextStep = () => {
+    if (currentStep < steps.length - 1 && canProceedToStep(currentStep + 1)) {
+      setCurrentStep(currentStep + 1);
+    } else if (!canProceedToStep(currentStep + 1)) {
+      toast.error("Completa los campos requeridos antes de continuar");
+    }
+  };
+
+  const handlePrevStep = () => {
+    if (currentStep > 0) setCurrentStep(currentStep - 1);
+  };
+
   const [allModifierSets, setAllModifierSets] = useState<MiniModifierSet[]>([]);
   const [selectedModifierSetIds, setSelectedModifierSetIds] = useState<
     string[]
@@ -3212,6 +3249,58 @@ export function ProductModal({
               </div>
             </div>
           </DialogHeader>
+
+          <div className="px-6 py-3 border-b bg-gray-50">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1 overflow-x-auto">
+                {steps.map((step, index) => (
+                  <button
+                    key={index}
+                    type="button"
+                    onClick={() => goToStep(index)}
+                    disabled={!canProceedToStep(index) && index > currentStep}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm whitespace-nowrap transition-colors ${
+                      index === currentStep
+                        ? "bg-primary text-white"
+                        : index < currentStep
+                        ? "bg-green-100 text-green-700"
+                        : canProceedToStep(index)
+                        ? "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                        : "bg-gray-50 text-gray-400 cursor-not-allowed"
+                    }`}
+                  >
+                    {index < currentStep ? (
+                      <Check className="h-3 w-3" />
+                    ) : (
+                      <span className="h-5 w-5 rounded-full bg-current/20 flex items-center justify-center text-xs">
+                        {index + 1}
+                      </span>
+                    )}
+                    {step.name}
+                  </button>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handlePrevStep}
+                  disabled={currentStep === 0}
+                >
+                  Anterior
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={handleNextStep}
+                  disabled={currentStep === steps.length - 1}
+                >
+                  Siguiente
+                </Button>
+              </div>
+            </div>
+          </div>
 
           <div className="!pb-10 mx-auto flex w-full max-w-[1400px] flex-col gap-6 px-6 pb-10 lg:flex-row lg:items-start lg:gap-8">
             <div className="flex-1 space-y-6">

@@ -397,21 +397,60 @@ export async function verifySmsOtpAction(formData: FormData): Promise<any> {
         .eq("user_id", userId)
         .limit(2);
       
-      const userRole = memberData && memberData.length > 0 ? memberData[0].role : null;
-      const orgId = memberData && memberData.length > 0 ? memberData[0].organization_id : null;
-      const isOwnerOrAdmin = userRole === 'owner' || userRole === 'admin';
-      
-      // BYPASS: Redirect to API route that will establish session
-      // The API route will create session via admin.generateLink + verifyOtp
-      const nextPath = isOwnerOrAdmin ? "/organization/dashboard" : "/home";
-      console.log("[bypass] Redirecting to establish session for user:", userId, "org:", orgId, "next:", nextPath);
-      return redirect(`/api/auth/bypass-session?user=${userId}&org=${orgId || ''}&next=${encodeURIComponent(nextPath)}`);
+       const userRole = memberData && memberData.length > 0 ? memberData[0].role : null;
+       const orgId = memberData && memberData.length > 0 ? memberData[0].organization_id : null;
+       const isOwnerOrAdmin = userRole === 'owner' || userRole === 'admin';
        
-    } catch (err) {
-      console.error("[bypass] Error:", err);
-      return redirect("/login?type=error&message=Error en bypass");
-    }
-  }
+       const nextPath = isOwnerOrAdmin ? "/home" : "/home";
+       console.log("[bypass] Establishing session for user:", userId, "org:", orgId, "next:", nextPath);
+       
+       // Obtener email del usuario para generateLink
+       const { data: userData, error: userError } = await admin.auth.admin.getUserById(userId);
+       if (userError || !userData?.user?.email) {
+         console.error("[bypass] Failed to get user email:", userError);
+         return redirect("/login?type=error&message=Error en bypass");
+       }
+       const userEmail = userData.user.email;
+       console.log("[bypass] User email:", userEmail);
+       
+       // Generate magic link + verify OTP - establece sesión
+       const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
+         type: 'magiclink',
+         email: userEmail,
+       });
+       
+       if (linkError || !linkData?.properties?.hashed_token) {
+         console.error("[bypass] Failed to generate link:", linkError);
+         return redirect("/login?type=error&message=Error en bypass");
+       }
+       
+       console.log("[bypass] Link generated, verifying OTP...");
+       
+       const { error: verifyError } = await supabase.auth.verifyOtp({
+         token_hash: linkData.properties.hashed_token,
+         type: 'magiclink',
+       });
+       
+       if (verifyError) {
+         console.error("[bypass] Verify OTP error:", verifyError);
+         return redirect("/login?type=error&message=Error en bypass");
+       }
+       
+       console.log("[bypass] Session established successfully!");
+       
+       // Redirect normal - usa redirect() de Next.js que preserva cookies
+       if (orgId) {
+         console.log("[bypass] Redirecting to /api/org/select?org=" + orgId + "&next=" + nextPath);
+         return redirect(`/api/org/select?org=${orgId}&next=${nextPath}`);
+       }
+       
+       return redirect("/org/select");
+        
+     } catch (err) {
+       console.error("[bypass] Error:", err);
+       return redirect("/login?type=error&message=Error en bypass");
+     }
+   }
 
   // Flujo normal: Verificar OTP usando Supabase nativo
   const { data, error } = await supabase.auth.verifyOtp({
@@ -453,7 +492,7 @@ export async function verifySmsOtpAction(formData: FormData): Promise<any> {
   
   // If user has exactly 1 org, redirect directly to API to set cookie + go to appropriate page
   if (orgId) {
-    const nextPath = isOwnerOrAdmin ? "/organization/dashboard" : "/home";
+    const nextPath = isOwnerOrAdmin ? "/home" : "/home";
     console.log("[verify] User has 1 org, redirecting to API to set org:", orgId, "next:", nextPath);
     return redirect(`/api/org/select?org=${orgId}&next=${nextPath}`);
   }

@@ -29,7 +29,13 @@ const safeHref = (href: string) => (isProd ? "/we-are-working" : href)
 
   // Build menu items from dynamic config
   const buildMenuFromConfig = (menuConfig: any[], memberRole: string | null, userMenuAccess: string[] | null) => {
-    if (!menuConfig || menuConfig.length === 0) {
+    console.log("menuConfig", menuConfig)
+    console.log("memberRole", memberRole)
+    console.log("userMenuAccess", userMenuAccess)
+    console.log("no config", !menuConfig || menuConfig.length === 0)
+
+    /*if (!menuConfig || menuConfig.length === 0) {
+      console.log("no config, returning default items")
       // Fallback to default items if no config
       const defaultItems = [
         { label: "Inicio", href: "/home", icon: "Home" },
@@ -42,7 +48,7 @@ const safeHref = (href: string) => (isProd ? "/we-are-working" : href)
         ...item,
         icon: getIcon(item.icon),
       }));
-    }
+    }*/
 
     // If user has custom menu access, filter by those paths
     const userAccessiblePaths = userMenuAccess && Array.isArray(userMenuAccess) && userMenuAccess.length > 0

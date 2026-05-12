@@ -15,9 +15,18 @@ import {
 import { DateRange } from "react-day-picker";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useEnvironment } from "@/context/EnvironmentContext";
 import { getSupabaseBrowser } from "@/utils/supabase/client";
+import { useOrganizationAnalytics } from "@/hooks/useOrganizationAnalytics";
 import { cn } from "@/lib/utils";
 import type { DBCustomer } from "@/types/customers";
 
@@ -672,16 +681,21 @@ function TopCustomersList({ items }: TopCustomersListProps) {
 }
 
 export default function DashboardHomePage() {
-  const { org, locationAccess, isAdmin } = useEnvironment();
+  const { org, locationAccess, isAdmin, organizationLocations } = useEnvironment();
   const organizationId = org?.id ?? null;
   const supabase = useMemo(() => getSupabaseBrowser(), []);
 
   const canViewAllLocations = locationAccess.canAccessAllLocations;
-  const userLocations = locationAccess.currentLocation ? [locationAccess.currentLocation] : [];
   const currentLocation = locationAccess.currentLocation;
+  
+  const allLocations = organizationLocations || [];
+  const userLocations = currentLocation ? [currentLocation] : [];
 
   const [selectedLocationId, setSelectedLocationId] = useState<string | null>(
     canViewAllLocations ? null : currentLocation?.id ?? null
+  );
+  const [showAllLocations, setShowAllLocations] = useState<boolean>(
+    canViewAllLocations && selectedLocationId === null
   );
   const [timeRange, setTimeRange] = useState<TimeRange>("this_month");
   const [rangeMode, setRangeMode] = useState<"preset" | "custom">("preset");
@@ -690,6 +704,7 @@ export default function DashboardHomePage() {
   const [customers, setCustomers] = useState<DashboardCustomer[]>([]);
   const [totalCustomers, setTotalCustomers] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
+  const { loadLocationPerformance, locationPerformance, loading: locationLoading } = useOrganizationAnalytics(organizationId ?? undefined);
   const [error, setError] = useState<string | null>(null);
   const requestRef = useRef(0);
 
@@ -702,6 +717,13 @@ export default function DashboardHomePage() {
     const preset = getTimeRangeDates(timeRange);
     return { ...preset, mode: "preset" as const };
   }, [customRange, rangeMode, timeRange]);
+
+  useEffect(() => {
+    if (showAllLocations && organizationId) {
+      const targetDate = activeRange.start;
+      loadLocationPerformance(targetDate);
+    }
+  }, [showAllLocations, timeRange, rangeMode, customRange, organizationId, loadLocationPerformance]);
 
   const fetchDashboard = useCallback(async () => {
     if (!organizationId) {
@@ -969,20 +991,31 @@ export default function DashboardHomePage() {
 
         <div className="flex flex-col gap-2 md:flex-row md:flex-wrap md:items-center md:justify-between md:gap-4">
           <div className="flex items-center gap-3">
-            {canViewAllLocations && userLocations.length > 0 && (
-              <select
-                value={selectedLocationId ?? ""}
-                onChange={(e) => setSelectedLocationId(e.target.value || null)}
-                disabled={loading}
-                className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700"
+            {canViewAllLocations && allLocations.length > 0 && (
+              <Select
+                value={showAllLocations ? "all" : (selectedLocationId || "all")}
+                onValueChange={(value) => {
+                  if (value === "all") {
+                    setSelectedLocationId(null);
+                    setShowAllLocations(true);
+                  } else {
+                    setSelectedLocationId(value);
+                    setShowAllLocations(false);
+                  }
+                }}
               >
-                <option value="">Todas las sucursales</option>
-                {userLocations.map((loc: any) => (
-                  <option key={loc.id} value={loc.id}>
-                    {loc.name}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger className="h-10 w-[180px] rounded-xl border border-slate-200 bg-white text-sm font-medium">
+                  <SelectValue placeholder="Todas las sucursales" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas las sucursales</SelectItem>
+                  {allLocations.map((loc) => (
+                    <SelectItem key={loc.id} value={loc.id}>
+                      {loc.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             )}
             {!canViewAllLocations && currentLocation && (
               <div className="flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700">
@@ -1053,6 +1086,65 @@ export default function DashboardHomePage() {
                 accent="from-amber-100 via-orange-50 to-transparent"
               />
             </section>
+
+            {showAllLocations && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Rendimiento por Sucursal</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {locationLoading ? (
+                    <p className="text-gray-500 text-center py-4">Cargando...</p>
+                  ) : locationPerformance.length === 0 ? (
+                    <p className="text-gray-500 text-center py-4">No hay datos de sucursales</p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="border-b">
+                            <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">Sucursal</th>
+                            <th className="text-right py-3 px-4 text-sm font-medium text-gray-600">Ventas</th>
+                            <th className="text-right py-3 px-4 text-sm font-medium text-gray-600">Pedidos</th>
+                            <th className="text-right py-3 px-4 text-sm font-medium text-gray-600">Ticket Prom.</th>
+                            <th className="text-right py-3 px-4 text-sm font-medium text-gray-600">vs Ayer</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {locationPerformance.map((location) => (
+                            <tr key={location.locationId} className="border-b hover:bg-gray-50">
+                              <td className="py-3 px-4 font-medium">{location.locationName}</td>
+                              <td className="py-3 px-4 text-right">{formatCurrency(location.revenue)}</td>
+                              <td className="py-3 px-4 text-right">{location.orders}</td>
+                              <td className="py-3 px-4 text-right">{formatCurrency(location.averageTicket)}</td>
+                              <td className={`py-3 px-4 text-right ${location.comparisonVsYesterday >= 0 ? "text-green-600" : "text-red-600"}`}>
+                                {location.comparisonVsYesterday >= 0 ? "+" : ""}{location.comparisonVsYesterday.toFixed(1)}%
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr className="bg-gray-100 font-bold">
+                            <td className="py-3 px-4">TOTAL</td>
+                            <td className="py-3 px-4 text-right">
+                              {formatCurrency(locationPerformance.reduce((sum, l) => sum + l.revenue, 0))}
+                            </td>
+                            <td className="py-3 px-4 text-right">
+                              {locationPerformance.reduce((sum, l) => sum + l.orders, 0)}
+                            </td>
+                            <td className="py-3 px-4 text-right">
+                              {locationPerformance.reduce((sum, l) => sum + l.orders, 0) > 0
+                                ? formatCurrency(locationPerformance.reduce((sum, l) => sum + l.revenue, 0) / locationPerformance.reduce((sum, l) => sum + l.orders, 0))
+                                : "-"}
+                            </td>
+                            <td className="py-3 px-4 text-right">-</td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
 
             <section className="grid grid-cols-1 gap-4">
               <div className="flex items-center justify-between rounded-3xl border-slate-200 bg-white px-5 py-4 shadow-sm shadow-slate-100/40">
